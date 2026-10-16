@@ -22,34 +22,8 @@ The project uses Python and OpenCV to process images, extract eye-related inform
 - **Python** — programming language.
 - **OpenCV** — image processing.
 - **NumPy** — numerical and array operations.
-- **Matplotlib** — visualization and plotting, if used by the scripts.
-
-## Project Structure
-
-Blink\_Analysis\_System/
-│
-├── blink\_analysis\_main.py
-├── README.md
-│
-└── stage\_wise\_blink\_analysis/
-   │   └── no\_trial\_lens/
-   │       ├── stage1\_glint\_detection.py
-   │       ├── stage2\_pupil\_boundary.py
-   │       ├── stage3\_angle\_detection.py
-   │       ├──  stage4\_intensity\_profile.py
-   │       ├──  stage5\_average\_fit.py
-   │       └──  stage6\_slope\_detection.py
-   │
-   └── trial\_lens/
-        ├── stage1\_pupil\_segmentation.py
-        ├── stage2\_pupil\_glint.py
-        ├── stage3\_pupil\_angle\_detection.py
-        ├── stage4\_intensity\_profile.py
-        ├── stage5\_average\_fit.py
-        └── stage6\_slope\_detection.py
-
-*The structure above reflects the currently known filenames. Update it if your folders or scripts differ.\*
-
+- **Matplotlib** — visualization and plotting, if used by the scripts.       
+ 
 ## Installation
 ### 1. Install Python
   Install a compatible Python version and verify it:
