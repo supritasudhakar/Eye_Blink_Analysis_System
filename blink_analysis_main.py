@@ -19,17 +19,15 @@ ROOT_HR_FOLDER = (
 
 
 # ============================================================
-# 3 INPUT PATHS
+# MULTIPLE INPUT PATHS
 # ============================================================
-# Enter the three input folder paths directly here.
-# The program will process all 3 folders in one run.
-#
-# Input 1, Input 2 and Input 3 will be shown separately in
-# the LEFT-EYE and RIGHT-EYE slope-vs-angle graphs.
+# Add as many input folder paths as you need.
+# Keep at least 2 paths in this list.
+# Every listed folder is processed in one run and appears
+# separately in the LEFT-EYE and RIGHT-EYE slope-vs-angle graphs.
 
 INPUT_PATHS = [
-   ]
-
+]
 # ============================================================
 # OUTPUT FOLDERS
 # ============================================================
@@ -69,12 +67,12 @@ SLOPE_ANGLE_CSV_FILE = "slope_vs_angle_values.csv"
 SAVE_SLOPE_ANGLE_GRAPH = True
 
 # ============================================================
-# 3-INPUT SLOPE vs ANGLE GRAPH
+# MULTI-INPUT SLOPE vs ANGLE GRAPH
 # ============================================================
 
-# Three input folders are processed in one run.
+# All configured input folders are processed in one run.
 # Final comparison contains: left-eye graph and right-eye graph.
-# Each input is shown with a different marker and label.
+# Each input is shown with a marker and label.
 MULTI_INPUT_OUTPUT_FOLDER = "slope_vs_angle_3_inputs"
 MULTI_LEFT_GRAPH_FILE = "left_eye_slope_vs_angle.png"
 MULTI_RIGHT_GRAPH_FILE = "right_eye_slope_vs_angle.png"
@@ -3024,7 +3022,7 @@ def save_multi_input_slope_vs_angle_graphs(
     output_root
 ):
     """Create separate left-eye and right-eye slope-vs-angle graphs
-    containing data from up to three input folders."""
+    containing data from all configured input folders."""
 
     if not all_rows:
         print("No multi-input slope-vs-angle data available.")
@@ -3083,7 +3081,7 @@ def save_multi_input_slope_vs_angle_graphs(
         print("No valid multi-input slope-vs-angle points available.")
         return
 
-    # Save one combined CSV for all three inputs.
+    # Save one combined CSV for all inputs.
     combined_csv = os.path.join(
         output_root,
         MULTI_SLOPE_ANGLE_CSV_FILE
@@ -3120,8 +3118,11 @@ def save_multi_input_slope_vs_angle_graphs(
             input_ids.append(row["input_id"])
             input_labels[row["input_id"]] = row["input_label"]
 
-    # Exactly three marker types for the requested three inputs.
-    marker_list = ["o", "s", "^"]
+    # Cycle marker styles if there are more inputs than marker types.
+    marker_list = [
+        "o", "s", "^", "D", "v", "P", "X", "*",
+        "<", ">", "p", "h", "8", "d", "H", "+"
+    ]
 
     def create_eye_graph(eye_name, output_file):
         eye_rows = [row for row in rows if row["eye"] == eye_name]
@@ -3129,7 +3130,7 @@ def save_multi_input_slope_vs_angle_graphs(
         plt.figure(figsize=(10, 6))
         plotted = 0
 
-        for idx, input_id in enumerate(input_ids[:3]):
+        for idx, input_id in enumerate(input_ids):
             input_rows = [
                 row for row in eye_rows
                 if row["input_id"] == input_id
@@ -3146,7 +3147,7 @@ def save_multi_input_slope_vs_angle_graphs(
             plt.scatter(
                 x,
                 y,
-                marker=marker_list[idx],
+                marker=marker_list[idx % len(marker_list)],
                 s=45,
                 label=(
                     f"Input {idx + 1}: "
@@ -3159,7 +3160,7 @@ def save_multi_input_slope_vs_angle_graphs(
         plt.xlabel("Angle (degrees)")
         plt.ylabel("Slope")
         plt.title(
-            f"{eye_name.capitalize()} Eye - Slope vs Angle (3 Inputs)"
+            f"{eye_name.capitalize()} Eye - Slope vs Angle ({len(input_ids)} Inputs)"
         )
         plt.grid(True, alpha=0.3)
 
@@ -5648,20 +5649,20 @@ if __name__ == "__main__":
 
     print()
     print("=" * 80)
-    print("3-INPUT SLOPE vs ANGLE PROCESSING")
+    print("MULTI-INPUT SLOPE vs ANGLE PROCESSING")
     print("=" * 80)
     print()
 
     # --------------------------------------------------------
-    # USE THE THREE PATHS ENTERED ABOVE
+    # USE ALL PATHS ENTERED ABOVE
     # --------------------------------------------------------
     # No command-line input and no runtime path prompt.
     # Edit INPUT_PATHS at the top of this file when you want
-    # to process a different set of three folders.
+    # to process a different set of folders.
 
-    if len(INPUT_PATHS) != 3:
+    if len(INPUT_PATHS) < 2:
         print(
-            "ERROR: INPUT_PATHS must contain exactly 3 folder paths."
+            "ERROR: INPUT_PATHS must contain at least 2 folder paths."
         )
         sys.exit(1)
 
@@ -5670,7 +5671,7 @@ if __name__ == "__main__":
         for path in INPUT_PATHS
     ]
 
-    # Validate all three paths before processing.
+    # Validate all input paths before processing.
     for index, folder in enumerate(input_folders, start=1):
 
         if not os.path.isdir(folder):
@@ -5688,7 +5689,7 @@ if __name__ == "__main__":
             f"Input {i}: {folder}"
         )
 
-    # Collect slope-angle records from all three inputs.
+    # Collect slope-angle records from all inputs.
     all_slope_angle_rows = []
 
     for i, folder in enumerate(input_folders, start=1):
@@ -5721,8 +5722,8 @@ if __name__ == "__main__":
 
     # --------------------------------------------------------
     # CREATE TWO SEPARATE COMPARISON GRAPHS:
-    #   1. Left eye  -> all 3 inputs
-    #   2. Right eye -> all 3 inputs
+    #   1. Left eye  -> all configured inputs
+    #   2. Right eye -> all configured inputs
     # --------------------------------------------------------
 
     script_folder = os.path.dirname(
@@ -5736,7 +5737,7 @@ if __name__ == "__main__":
 
     print()
     print("=" * 80)
-    print("CREATING 3-INPUT COMPARISON GRAPHS")
+    print("CREATING MULTI-INPUT COMPARISON GRAPHS")
     print("=" * 80)
 
     save_multi_input_slope_vs_angle_graphs(
