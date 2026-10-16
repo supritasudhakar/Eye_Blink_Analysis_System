@@ -9,27 +9,17 @@ import math
 
 
 # ============================================================
-# ROOT FOLDER
+# ROOT FOLDER AND MULTIPLE INPUT PATHS
 # ============================================================
+# These values are entered in the command prompt when the script runs.
+# First, enter the root folder. Next, enter how many input folders to process.
+# Then enter each input folder path one by one.
+# Input paths can be full paths or folder paths relative to the root folder.
+# The final combined graph and CSV are saved inside the root folder.
 
-ROOT_HR_FOLDER = (r"C:\Users\neo\OneDrive\Desktop\auto_annotation(unet_model)\pupil_image\arnav"
-    
-)
+ROOT_HR_FOLDER = ""
+INPUT_PATHS = []
 
-
-
-# ============================================================
-# MULTIPLE INPUT PATHS
-# ============================================================
-# Add as many input folder paths as you need.
-# Keep at least 2 paths in this list.
-# Every listed folder is processed in one run and appears
-# separately in the LEFT-EYE and RIGHT-EYE slope-vs-angle graphs.
-
-INPUT_PATHS = [
-    r"C:\Users\neo\OneDrive\Desktop\auto_annotation(unet_model)\pupil_image\arnav\arnav_800_mA_Exp_100_AGain_2.0_20260916_145341",
-    r"C:\Users\neo\OneDrive\Desktop\auto_annotation(unet_model)\pupil_image\arnav\arnav_800_mA_Exp_100_AGain_2.0_20260916_145359"
-]
 # ============================================================
 # OUTPUT FOLDERS
 # ============================================================
@@ -66,19 +56,20 @@ SAVE_INTENSITY_PROFILE_GRAPHS = True
 SLOPE_ANGLE_GRAPH_FOLDER = "slope_vs_angle"
 SLOPE_ANGLE_GRAPH_FILE = "slope_vs_angle.png"
 SLOPE_ANGLE_CSV_FILE = "slope_vs_angle_values.csv"
-SAVE_SLOPE_ANGLE_GRAPH = True
+# Disable per-folder slope-vs-angle graphs. The final combined graph below
+# will contain data from every input path in one figure.
+SAVE_SLOPE_ANGLE_GRAPH = False
 
 # ============================================================
 # MULTI-INPUT SLOPE vs ANGLE GRAPH
 # ============================================================
 
 # All configured input folders are processed in one run.
-# Final comparison contains: left-eye graph and right-eye graph.
-# Each input is shown with a marker and label.
-MULTI_INPUT_OUTPUT_FOLDER = "slope_vs_angle_3_inputs"
-MULTI_LEFT_GRAPH_FILE = "left_eye_slope_vs_angle.png"
-MULTI_RIGHT_GRAPH_FILE = "right_eye_slope_vs_angle.png"
-MULTI_SLOPE_ANGLE_CSV_FILE = "slope_vs_angle_3_inputs.csv"
+# FINAL OUTPUT: one graph containing every input path and both eyes.
+# Each input-path/eye combination has its own legend entry.
+MULTI_INPUT_OUTPUT_FOLDER = "slope_vs_angle_all_inputs"
+MULTI_GRAPH_FILE = "all_inputs_slope_vs_angle.png"
+MULTI_SLOPE_ANGLE_CSV_FILE = "slope_vs_angle_all_inputs.csv"
 
 
 # ============================================================
@@ -3016,15 +3007,15 @@ def save_slope_vs_angle_graph(
 
 
 # ============================================================
-# SAVE 3-INPUT SLOPE vs ANGLE GRAPHS
+# SAVE ONE COMBINED SLOPE vs ANGLE GRAPH
 # ============================================================
 
 def save_multi_input_slope_vs_angle_graphs(
     all_rows,
     output_root
 ):
-    """Create separate left-eye and right-eye slope-vs-angle graphs
-    containing data from all configured input folders."""
+    """Save one slope-vs-angle graph and one CSV for all input folders
+    and both eyes."""
 
     if not all_rows:
         print("No multi-input slope-vs-angle data available.")
@@ -3120,74 +3111,61 @@ def save_multi_input_slope_vs_angle_graphs(
             input_ids.append(row["input_id"])
             input_labels[row["input_id"]] = row["input_label"]
 
-    # Cycle marker styles if there are more inputs than marker types.
+    # Create ONE graph containing all configured input paths and both eyes.
+    # Matplotlib automatically cycles through colors; marker styles also cycle.
     marker_list = [
         "o", "s", "^", "D", "v", "P", "X", "*",
         "<", ">", "p", "h", "8", "d", "H", "+"
     ]
 
-    def create_eye_graph(eye_name, output_file):
-        eye_rows = [row for row in rows if row["eye"] == eye_name]
+    import matplotlib.pyplot as plt
+    plt.figure(figsize=(12, 7))
 
-        plt.figure(figsize=(10, 6))
-        plotted = 0
-
-        for idx, input_id in enumerate(input_ids):
-            input_rows = [
-                row for row in eye_rows
-                if row["input_id"] == input_id
+    plotted = 0
+    series_index = 0
+    for input_id in input_ids:
+        for eye_name in ("left", "right"):
+            series_rows = [
+                row for row in rows
+                if row["input_id"] == input_id and row["eye"] == eye_name
             ]
 
-            if not input_rows:
+            if not series_rows:
                 continue
 
-            input_rows.sort(key=lambda row: row["angle_deg"])
-
-            x = [row["angle_deg"] for row in input_rows]
-            y = [row["slope"] for row in input_rows]
+            series_rows.sort(key=lambda row: row["angle_deg"])
+            x = [row["angle_deg"] for row in series_rows]
+            y = [row["slope"] for row in series_rows]
+            input_label = input_labels.get(input_id, input_id)
 
             plt.scatter(
                 x,
                 y,
-                marker=marker_list[idx % len(marker_list)],
-                s=45,
-                label=(
-                    f"Input {idx + 1}: "
-                    f"{input_labels.get(input_id, input_id)}"
-                )
+                marker=marker_list[series_index % len(marker_list)],
+                s=48,
+                label=f"Input {input_id} - {input_label} - {eye_name.capitalize()} Eye"
             )
 
-            plotted += len(input_rows)
+            plotted += len(series_rows)
+            series_index += 1
 
-        plt.xlabel("Angle (degrees)")
-        plt.ylabel("Slope")
-        plt.title(
-            f"{eye_name.capitalize()} Eye - Slope vs Angle ({len(input_ids)} Inputs)"
-        )
-        plt.grid(True, alpha=0.3)
+    plt.xlabel("Angle (degrees)")
+    plt.ylabel("Slope")
+    plt.title(f"Slope vs Angle - All Input Paths ({len(input_ids)} Inputs, Both Eyes)")
+    plt.grid(True, alpha=0.3)
 
-        if plotted:
-            plt.legend()
+    if plotted:
+        # Place the legend beside the plot so it does not cover data points.
+        plt.legend(loc="upper left", bbox_to_anchor=(1.02, 1), fontsize="small")
 
-        plt.tight_layout()
+    plt.tight_layout()
+    graph_path = os.path.join(output_root, MULTI_GRAPH_FILE)
+    plt.savefig(graph_path, dpi=200, bbox_inches="tight")
+    plt.close()
 
-        output_path = os.path.join(output_root, output_file)
-        plt.savefig(output_path, dpi=200, bbox_inches="tight")
-        plt.close()
-
-        print(
-            f"{eye_name.capitalize()} eye graph saved : {output_path}"
-        )
-        print(
-            f"{eye_name.capitalize()} eye points      : {plotted}"
-        )
-
-    create_eye_graph("left", MULTI_LEFT_GRAPH_FILE)
-    create_eye_graph("right", MULTI_RIGHT_GRAPH_FILE)
-
-    print(
-        f"Combined CSV saved                  : {combined_csv}"
-    )
+    print(f"Combined all-input graph saved       : {graph_path}")
+    print(f"Combined graph data points           : {plotted}")
+    print(f"Combined CSV saved                    : {combined_csv}")
 
 
 # ============================================================
@@ -5656,32 +5634,69 @@ if __name__ == "__main__":
     print()
 
     # --------------------------------------------------------
-    # USE ALL PATHS ENTERED ABOVE
+    # ASK FOR ROOT FOLDER AND INPUT PATHS IN THE COMMAND PROMPT
     # --------------------------------------------------------
-    # No command-line input and no runtime path prompt.
-    # Edit INPUT_PATHS at the top of this file when you want
-    # to process a different set of folders.
+    root_path_entered = input(
+        "Enter the root folder path (output folder and base for relative input paths): "
+    ).strip().strip('"')
 
-    if len(INPUT_PATHS) < 2:
-        print(
-            "ERROR: INPUT_PATHS must contain at least 2 folder paths."
-        )
+    if not root_path_entered:
+        print("ERROR: Root folder path cannot be empty.")
         sys.exit(1)
 
-    input_folders = [
-        os.path.abspath(os.path.expanduser(path.strip().strip('"')))
-        for path in INPUT_PATHS
-    ]
+    ROOT_HR_FOLDER = os.path.abspath(
+        os.path.expanduser(root_path_entered)
+    )
+
+    if not os.path.isdir(ROOT_HR_FOLDER):
+        print()
+        print("ERROR: Root folder does not exist:")
+        print(ROOT_HR_FOLDER)
+        sys.exit(1)
+
+    try:
+        number_of_paths = int(
+            input("Enter the number of input paths to process: ").strip()
+        )
+    except ValueError:
+        print("ERROR: Please enter the number of paths as an integer, such as 3 or 5.")
+        sys.exit(1)
+
+    if number_of_paths < 1:
+        print("ERROR: Please enter at least 1 input path.")
+        sys.exit(1)
+
+    INPUT_PATHS = []
+
+    for index in range(1, number_of_paths + 1):
+        entered_path = input(
+            f"Enter the path for input folder {index} (full path or relative to root): "
+        ).strip().strip('"')
+
+        if not entered_path:
+            print(f"ERROR: Input path {index} cannot be empty.")
+            sys.exit(1)
+
+        entered_path = os.path.expanduser(entered_path)
+
+        # Absolute paths are used as entered. Relative paths are joined to the root folder.
+        if os.path.isabs(entered_path):
+            resolved_path = entered_path
+        else:
+            resolved_path = os.path.join(ROOT_HR_FOLDER, entered_path)
+
+        INPUT_PATHS.append(os.path.abspath(resolved_path))
+
+    input_folders = list(INPUT_PATHS)
 
     # Validate all input paths before processing.
     for index, folder in enumerate(input_folders, start=1):
-
         if not os.path.isdir(folder):
             print()
             print(f"ERROR: Input path {index} does not exist:")
             print(folder)
             print()
-            print("Edit INPUT_PATHS near the top of the code.")
+            print("Please check the path you entered and run the script again.")
             sys.exit(1)
 
     print("Input folders:")
@@ -5723,23 +5738,18 @@ if __name__ == "__main__":
             all_slope_angle_rows.append(new_row)
 
     # --------------------------------------------------------
-    # CREATE TWO SEPARATE COMPARISON GRAPHS:
-    #   1. Left eye  -> all configured inputs
-    #   2. Right eye -> all configured inputs
+    # CREATE ONE COMBINED GRAPH containing all paths and both eyes.
     # --------------------------------------------------------
 
-    script_folder = os.path.dirname(
-        os.path.abspath(__file__)
-    )
-
+    # Save the final combined graph and CSV inside ROOT_HR_FOLDER.
     multi_output_root = os.path.join(
-        script_folder,
+        ROOT_HR_FOLDER,
         MULTI_INPUT_OUTPUT_FOLDER
     )
 
     print()
     print("=" * 80)
-    print("CREATING MULTI-INPUT COMPARISON GRAPHS")
+    print("CREATING ONE COMBINED SLOPE-vs-ANGLE GRAPH FOR ALL INPUT PATHS")
     print("=" * 80)
 
     save_multi_input_slope_vs_angle_graphs(
