@@ -21,19 +21,12 @@ stage3_angle/csv/angle_results.csv
 The script reuses the Stage 1 pupil masks and Stage 2 glint detections.
 It does not run pupil detection or glint detection again.
 No YOLO, ML, or Haar cascade is used.
-
-Angle method:
-    - Calculate the geometric pupil centre from the saved pupil mask.
-    - Restrict pixels to the inner part of the pupil.
-    - Exclude the already-detected Stage 2 glint region.
-    - Calculate the intensity-weighted bright point.
-    - Calculate the direction from the pupil centre to that point.
-    - Optionally use a shared circular-mean direction for both eyes.
 """
 
 from pathlib import Path
 import csv
 import math
+import os
 import traceback
 
 import cv2
@@ -41,42 +34,16 @@ import numpy as np
 
 
 # ============================================================
-# 1. PATHS -- UPDATE BASE_FOLDER FOR YOUR DATASET
-# ============================================================
-
-BASE_FOLDER = Path(
-   )
-
-# Stage 1 outputs
-ORIGINAL_FOLDER = BASE_FOLDER
-MASK_FOLDER = BASE_FOLDER / "masks"
-STAGE1_CSV = BASE_FOLDER / "csv" / "results.csv"
-
-# Stage 2 outputs
-STAGE2_FOLDER = BASE_FOLDER / "stage2_glint"
-STAGE2_CSV = STAGE2_FOLDER / "csv" / "glint_results.csv"
-STAGE2_IMAGES = STAGE2_FOLDER / "images"
-
-# Stage 3 outputs
-OUTPUT_FOLDER = BASE_FOLDER / "stage3_angle"
-OUTPUT_IMAGES = OUTPUT_FOLDER / "images"
-OUTPUT_CSV = OUTPUT_FOLDER / "csv" / "angle_results.csv"
-
-
-# ============================================================
 # 2. ORIENTATION PARAMETERS
 # ============================================================
 
 # Keep the inner pupil region; exclude pixels too close to the rim.
-# Lower values exclude more of the pupil boundary.
 ORIENTATION_INNER_FRAC = 0.85
 
 # Smooth sensor noise before calculating intensity weights.
 ORIENTATION_BLUR_SIGMA = 1.5
 
-# Reject very weak directions if desired. Default 0.0 keeps the
-# previous behaviour, but a direction can still be unreliable
-# when the strength is extremely small.
+# Reject very weak directions if desired.
 MIN_STRENGTH = 0.0
 
 # Exclude a circular region around the Stage 2 glint centre.
@@ -85,7 +52,6 @@ GLINT_EXCLUDE_RADIUS_MAX = 12
 GLINT_EXCLUDE_RADIUS_SCALE = 2.5
 
 # True: both displayed arrows use the common circular-mean angle.
-# False: display the independently calculated angle for each eye.
 USE_COMMON_ANGLE_FOR_BOTH_EYES = True
 
 # If True, the angle range is 0 to <360 degrees.
@@ -217,14 +183,11 @@ def load_pupil(mask_path, expected_shape):
     if radius <= 1:
         return None
 
-    # Distance transform gives each pupil pixel's distance from the rim.
     distance_map = cv2.distanceTransform(binary, cv2.DIST_L2, 5)
     max_distance = float(distance_map.max())
     if max_distance <= 0:
         return None
 
-    # Exclude the outer rim. This is a radial inset approximation,
-    # useful for preventing boundary reflections from dominating.
     minimum_distance = (1.0 - ORIENTATION_INNER_FRAC) * max_distance
     inner_mask = (binary > 0) & (distance_map >= minimum_distance)
 
@@ -243,13 +206,7 @@ def load_pupil(mask_path, expected_shape):
 # ============================================================
 
 def remove_glint_region(inner_mask, glint_x, glint_y, glint_area):
-    """
-    Remove the existing Stage 2 glint and nearby pixels.
-
-    FIX: OpenCV drawing routines cannot draw on Boolean arrays.
-    Convert the mask to uint8 before cv2.circle(), then return a
-    Boolean mask for the intensity calculation.
-    """
+    """Remove the existing Stage 2 glint and nearby pixels."""
     usable = inner_mask.astype(np.uint8).copy()
 
     if glint_x is None or glint_y is None:
@@ -265,7 +222,6 @@ def remove_glint_region(inner_mask, glint_x, glint_y, glint_area):
     gx = int(round(glint_x))
     gy = int(round(glint_y))
 
-    # Mask values are 0/1 uint8 here, so drawing zero erases the region.
     cv2.circle(
         usable, (gx, gy), exclude_radius, 0, thickness=cv2.FILLED
     )
@@ -277,10 +233,7 @@ def remove_glint_region(inner_mask, glint_x, glint_y, glint_area):
 # ============================================================
 
 def calculate_orientation(gray, pupil, glint_row, side):
-    """
-    Calculate the angle from pupil centre toward its intensity-weighted
-    bright point, excluding the glint already detected by Stage 2.
-    """
+    """Calculate the angle from pupil centre toward its intensity-weighted bright point."""
     glint_status = str(
         (glint_row or {}).get(f"{side}_status", "")
     ).strip().upper()
@@ -323,9 +276,6 @@ def calculate_orientation(gray, pupil, glint_row, side):
         }
 
     values = blurred[ys, xs].astype(np.float64)
-
-    # Intensity weights: darkest valid pupil pixel has weight 0;
-    # brighter pixels receive larger weights.
     weights = np.clip(values - float(values.min()), 0.0, None)
     total_weight = float(weights.sum())
 
@@ -336,11 +286,9 @@ def calculate_orientation(gray, pupil, glint_row, side):
             "strength": 0.0,
         }
 
-    # Weighted centroid of the remaining bright pupil region.
     bright_x = float(np.sum(xs * weights) / total_weight)
     bright_y = float(np.sum(ys * weights) / total_weight)
 
-    # Vector from the geometric pupil centre toward the bright centroid.
     vx = bright_x - pupil["cx"]
     vy = bright_y - pupil["cy"]
     magnitude = float(math.hypot(vx, vy))
@@ -355,7 +303,6 @@ def calculate_orientation(gray, pupil, glint_row, side):
     ux = vx / magnitude
     uy = vy / magnitude
 
-    # Image-coordinate convention: x grows right, y grows down.
     angle = math.degrees(math.atan2(uy, ux))
     if NORMALIZE_ANGLE_TO_360:
         angle %= 360.0
@@ -398,7 +345,7 @@ def calculate_orientation(gray, pupil, glint_row, side):
 # ============================================================
 
 def circular_mean_degrees(angles):
-    """Average angles circularly so 359 and 1 degrees average near 0."""
+    """Average angles circularly."""
     valid = [
         float(a) for a in angles
         if a is not None and math.isfinite(float(a))
@@ -539,13 +486,12 @@ def draw_eye_annotation(image, pupil, orientation):
 # 10. PROCESS ONE IMAGE
 # ============================================================
 
-def process_image(image_path, stage1_row, stage2_row):
-    """Calculate both eye angles using the existing masks and glint CSV."""
+def process_image(image_path, stage1_row, stage2_row, mask_folder, stage2_images, output_images):
+    """Calculate both eye angles using existing masks and glint CSV."""
     gray = read_gray(image_path)
     stem = image_path.stem
 
-    # Use Stage 2 annotated output as the display background when available.
-    visual_path = STAGE2_IMAGES / f"{stem}_glint.png"
+    visual_path = stage2_images / f"{stem}_glint.png"
     if visual_path.exists():
         visual = cv2.imread(str(visual_path), cv2.IMREAD_COLOR)
     else:
@@ -562,7 +508,7 @@ def process_image(image_path, stage1_row, stage2_row):
     orientations = {"left": None, "right": None}
 
     for side in ("left", "right"):
-        mask_path = MASK_FOLDER / f"{stem}_mask_{side}.png"
+        mask_path = mask_folder / f"{stem}_mask_{side}.png"
 
         if not mask_path.exists():
             result[f"{side}_status"] = "MASK_NOT_FOUND"
@@ -648,115 +594,187 @@ def process_image(image_path, stage1_row, stage2_row):
     else:
         result["status"] = "NO_VALID_ANGLE"
 
-    output_path = OUTPUT_IMAGES / f"{stem}_angle.png"
+    output_path = output_images / f"{stem}_angle.png"
     result["image_saved"] = int(cv2.imwrite(str(output_path), visual))
 
     return result
 
 
 # ============================================================
-# 11. MAIN
+# 11. MAIN (INTERACTIVE TERMINAL INPUT)
 # ============================================================
 
 def main():
-    OUTPUT_IMAGES.mkdir(parents=True, exist_ok=True)
-    OUTPUT_CSV.parent.mkdir(parents=True, exist_ok=True)
+    print()
+    print("=" * 80)
+    print("STAGE 3 - PUPIL INTENSITY-BASED ANGLE (INTERACTIVE INPUT)")
+    print("=" * 80)
+    print()
 
-    if not ORIGINAL_FOLDER.exists():
-        raise FileNotFoundError(f"Dataset folder does not exist: {ORIGINAL_FOLDER}")
+    # Step 1: Enter base folder path (optional prefix)
+    base_folder = input("Enter base folder path (press Enter to skip): ").strip().strip('"')
 
-    # Show paths at startup so incorrect folders are easy to diagnose.
-    print("Stage 1 CSV:", STAGE1_CSV)
-    print("Stage 2 CSV:", STAGE2_CSV)
-    print("Pupil masks:", MASK_FOLDER)
-    print("Stage 2 images:", STAGE2_IMAGES)
+    # Step 2: Enter number of paths
+    while True:
+        try:
+            num_paths_str = input("Enter the number of input paths: ").strip()
+            num_paths = int(num_paths_str)
+            if num_paths > 0:
+                break
+            print("Please enter a number greater than 0.")
+        except ValueError:
+            print("Invalid input. Please enter a valid integer.")
 
-    stage1_rows = read_csv_index(STAGE1_CSV)
-    stage2_rows = read_csv_index(STAGE2_CSV)
+    # Step 3: Enter each subfolder or image path
+    input_paths_list = []
+    for i in range(1, num_paths + 1):
+        path_input = input(f"Enter input path {i} (subfolder or full path): ").strip().strip('"')
+        
+        if base_folder and not os.path.isabs(path_input):
+            full_path = os.path.join(base_folder, path_input)
+        else:
+            full_path = path_input
+            
+        input_paths_list.append(full_path)
 
-    image_files = [
-        p for p in ORIGINAL_FOLDER.iterdir()
-        if p.is_file()
-        and p.suffix.lower() in IMAGE_EXTENSIONS
-        and not p.stem.endswith(("_annotated", "_overlay", "_glint", "_angle"))
-        and "_mask_left" not in p.stem
-        and "_mask_right" not in p.stem
+    input_folders = [
+        Path(os.path.abspath(os.path.expanduser(path)))
+        for path in input_paths_list
     ]
 
-    image_index = {normalize_name(p.name): p for p in image_files}
-    results = []
-    image_keys = sorted(stage2_rows.keys())
-    total = len(image_keys)
+    for index, folder in enumerate(input_folders, start=1):
+        if not folder.is_dir():
+            print()
+            print(f"[ERROR] Input path {index} does not exist:")
+            print(folder)
+            print()
+            return
 
-    if total == 0:
-        print("ERROR: No image records found in Stage 2 glint CSV.")
-        return
+    for folder in input_folders:
+        print()
+        print("-" * 80)
+        print(f"Processing folder: {folder}")
+        print("-" * 80)
 
-    for index, key in enumerate(image_keys, start=1):
-        stage2_row = stage2_rows[key]
-        image_path = image_index.get(key)
+        original_folder = folder
+        mask_folder = folder / "masks"
+        stage1_csv = folder / "csv" / "results.csv"
 
-        if image_path is None:
-            result = {
-                "image": key,
-                "status": "ORIGINAL_IMAGE_NOT_FOUND",
-                "left_status": "NOT_PROCESSED",
-                "right_status": "NOT_PROCESSED",
-            }
-            results.append(result)
-            print(f"[{index}/{total}] {key}: ORIGINAL_IMAGE_NOT_FOUND")
+        stage2_folder = folder / "stage2_glint"
+        stage2_csv = stage2_folder / "csv" / "glint_results.csv"
+        stage2_images = stage2_folder / "images"
+
+        output_folder = folder / "stage3_angle"
+        output_images = output_folder / "images"
+        output_csv = output_folder / "csv" / "angle_results.csv"
+
+        output_images.mkdir(parents=True, exist_ok=True)
+        output_csv.parent.mkdir(parents=True, exist_ok=True)
+
+        if not original_folder.exists():
+            print(f"[WARNING] Dataset folder does not exist: {original_folder}")
             continue
 
-        stage1_row = stage1_rows.get(key, {})
+        print("Stage 1 CSV:", stage1_csv)
+        print("Stage 2 CSV:", stage2_csv)
+        print("Pupil masks:", mask_folder)
+        print("Stage 2 images:", stage2_images)
 
-        # Initialize columns even for exceptions, so CSV and terminal output
-        # show a meaningful status instead of only '-' placeholders.
         try:
-            result = process_image(image_path, stage1_row, stage2_row)
-        except Exception as exc:
+            stage1_rows = read_csv_index(stage1_csv)
+            stage2_rows = read_csv_index(stage2_csv)
+        except Exception as e:
+            print(f"[WARNING] Skipping {folder} due to CSV error: {e}")
+            continue
+
+        image_files = [
+            p for p in original_folder.iterdir()
+            if p.is_file()
+            and p.suffix.lower() in IMAGE_EXTENSIONS
+            and not p.stem.endswith(("_annotated", "_overlay", "_glint", "_angle"))
+            and "_mask_left" not in p.stem
+            and "_mask_right" not in p.stem
+        ]
+
+        image_index = {normalize_name(p.name): p for p in image_files}
+        results = []
+        image_keys = sorted(stage2_rows.keys())
+        total = len(image_keys)
+
+        if total == 0:
+            print(f"[WARNING] No image records found in Stage 2 glint CSV for: {folder}")
+            continue
+
+        for index_img, key in enumerate(image_keys, start=1):
+            stage2_row = stage2_rows[key]
+            image_path = image_index.get(key)
+
+            if image_path is None:
+                result = {
+                    "image": key,
+                    "status": "ORIGINAL_IMAGE_NOT_FOUND",
+                    "left_status": "NOT_PROCESSED",
+                    "right_status": "NOT_PROCESSED",
+                }
+                results.append(result)
+                print(f"[{index_img}/{total}] {key}: ORIGINAL_IMAGE_NOT_FOUND")
+                continue
+
+            stage1_row = stage1_rows.get(key, {})
+
+            try:
+                result = process_image(
+                    image_path, stage1_row, stage2_row,
+                    mask_folder, stage2_images, output_images
+                )
+            except Exception as exc:
+                print(
+                    f"[ERROR] {image_path.name}: {type(exc).__name__}: {exc}"
+                )
+                traceback.print_exc()
+                result = {
+                    "image": image_path.name,
+                    "status": f"ERROR: {type(exc).__name__}: {exc}",
+                    "left_status": "ERROR",
+                    "right_status": "ERROR",
+                    "left_raw_angle_deg": "",
+                    "right_raw_angle_deg": "",
+                    "left_angle_deg": "",
+                    "right_angle_deg": "",
+                    "common_angle_deg": "",
+                }
+
+            results.append(result)
+
             print(
-                f"[ERROR] {image_path.name}: {type(exc).__name__}: {exc}"
+                f"[{index_img}/{total}] {image_path.name}: "
+                f"Status={result.get('status', '-')}, "
+                f"L={result.get('left_angle_deg', '-')}, "
+                f"R={result.get('right_angle_deg', '-')}, "
+                f"Common={result.get('common_angle_deg', '-')}, "
+                f"L_status={result.get('left_status', '-')}, "
+                f"R_status={result.get('right_status', '-')}"
             )
-            traceback.print_exc()
-            result = {
-                "image": image_path.name,
-                "status": f"ERROR: {type(exc).__name__}: {exc}",
-                "left_status": "ERROR",
-                "right_status": "ERROR",
-                "left_raw_angle_deg": "",
-                "right_raw_angle_deg": "",
-                "left_angle_deg": "",
-                "right_angle_deg": "",
-                "common_angle_deg": "",
-            }
 
-        results.append(result)
+        columns = []
+        for row in results:
+            for field in row:
+                if field not in columns:
+                    columns.append(field)
 
-        print(
-            f"[{index}/{total}] {image_path.name}: "
-            f"Status={result.get('status', '-')}, "
-            f"L={result.get('left_angle_deg', '-')}, "
-            f"R={result.get('right_angle_deg', '-')}, "
-            f"Common={result.get('common_angle_deg', '-')}, "
-            f"L_status={result.get('left_status', '-')}, "
-            f"R_status={result.get('right_status', '-')}"
-        )
+        with open(output_csv, "w", newline="", encoding="utf-8-sig") as file:
+            writer = csv.DictWriter(file, fieldnames=columns)
+            writer.writeheader()
+            writer.writerows(results)
 
-    # Build CSV columns from all fields returned.
-    columns = []
-    for row in results:
-        for field in row:
-            if field not in columns:
-                columns.append(field)
+        print(f"\nStage 3 completed for {folder.name}.")
+        print("Images:", output_images)
+        print("CSV:", output_csv)
 
-    with open(OUTPUT_CSV, "w", newline="", encoding="utf-8-sig") as file:
-        writer = csv.DictWriter(file, fieldnames=columns)
-        writer.writeheader()
-        writer.writerows(results)
-
-    print("\nStage 3 completed.")
-    print("Images:", OUTPUT_IMAGES)
-    print("CSV:", OUTPUT_CSV)
+    print()
+    print("=" * 80)
+    print("ALL STAGE 3 PROCESSING COMPLETED")
+    print("=" * 80)
 
 
 if __name__ == "__main__":

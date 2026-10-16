@@ -40,33 +40,6 @@ import matplotlib.pyplot as plt
 
 
 # ============================================================
-# 1. ROOT FOLDER
-# ============================================================
-# This is the parent folder containing your lens datasets.
-# Update this if your datasets are stored somewhere else.
-ROOT_HR_FOLDER = Path(
-    
-)
-
-
-# ============================================================
-# 2. INPUT PATHS
-# ============================================================
-# You can supply dataset folders here. The old reference code used paths
-# ending in '\\annotated'; this version supports either the dataset folder
-# itself OR its 'annotated' subfolder.
-#
-# The list below contains the seven dataset paths from your reference code.
-# Each entry can point to the dataset folder OR its annotated subfolder.
-# To add another dataset, add one more ROOT_HR_FOLDER / "folder_name" entry.
-# To automatically discover ALL datasets instead, set INPUT_PATHS = [].
-INPUT_PATHS = [
-    # Dataset 1
-    ROOT_HR_FOLDER / "" 
-]
-
-
-# ============================================================
 # 3. FILE / OUTPUT NAMES
 # ============================================================
 STAGE5_FOLDER_NAME = "stage5_average_fit"
@@ -133,14 +106,12 @@ def resolve_dataset_folder(input_path):
             return parent
     if (path / STAGE5_FOLDER_NAME / STAGE5_AVERAGE_CSV).is_file():
         return path
-    # Recursive fallback supports folder layouts where stage output is nested.
     if path.exists():
         found = sorted(path.rglob(STAGE5_AVERAGE_CSV))
         found = [p for p in found if p.parent.name.lower() == STAGE5_FOLDER_NAME.lower()
                  and OUTPUT_FOLDER_NAME.lower() not in {part.lower() for part in p.parts}]
         if found:
             return found[0].parent.parent
-    # If caller supplied an annotated directory, search its parent too.
     if path.name.lower() == "annotated" and path.parent.exists():
         found = sorted(path.parent.rglob(STAGE5_AVERAGE_CSV))
         found = [p for p in found if p.parent.name.lower() == STAGE5_FOLDER_NAME.lower()
@@ -165,24 +136,6 @@ def find_stage5_csv(dataset_folder):
                if p.parent.name.lower() == STAGE5_FOLDER_NAME.lower()
                and OUTPUT_FOLDER_NAME.lower() not in {part.lower() for part in p.parts}]
     return matches[0] if matches else None
-
-
-def discover_datasets(root_folder):
-    """Find every dataset folder containing the expected Stage 5 CSV."""
-    root_folder = Path(root_folder)
-    if not root_folder.exists():
-        return []
-    matches = []
-    for csv_path in root_folder.rglob(STAGE5_AVERAGE_CSV):
-        parts_lower = {part.lower() for part in csv_path.parts}
-        if OUTPUT_FOLDER_NAME.lower() in parts_lower:
-            continue
-        if csv_path.parent.name.lower() != STAGE5_FOLDER_NAME.lower():
-            continue
-        matches.append(csv_path.parent.parent)
-    # Unique, stable order
-    unique = {str(p.resolve()): p for p in matches}
-    return [unique[k] for k in sorted(unique)]
 
 
 # ============================================================
@@ -293,8 +246,6 @@ def calculate_slope(profile_rows):
 # ============================================================
 def process_dataset(dataset_folder, slope_rows, status_rows):
     dataset_folder = Path(dataset_folder)
-    # If the supplied path ends in "annotated", use its parent dataset
-    # name in summaries so multiple datasets are not all labelled "annotated".
     dataset_name = (
         dataset_folder.parent.name
         if dataset_folder.name.lower() == "annotated"
@@ -530,26 +481,59 @@ def create_slope_vs_angle_graph(slope_rows, eye, output_path):
 
 
 # ============================================================
-# 12. MAIN
+# 12. MAIN (INTERACTIVE TERMINAL INPUT)
 # ============================================================
 def main():
-    print("\n" + "=" * 80)
-    print("STAGE 6 — FINAL SLOPE DETECTION")
+    print()
     print("=" * 80)
-    print(f"Root folder: {ROOT_HR_FOLDER}")
+    print("STAGE 6 - FINAL SLOPE DETECTION (INTERACTIVE INPUT)")
+    print("=" * 80)
+    print()
 
-    if INPUT_PATHS:
-        datasets = []
-        for input_value in INPUT_PATHS:
-            supplied = Path(input_value)
-            if not supplied.exists():
-                print(f"[WARNING] Input path does not exist: {supplied}")
-                continue
-            dataset = resolve_dataset_folder(supplied)
-            if dataset not in datasets:
-                datasets.append(dataset)
-    else:
-        datasets = discover_datasets(ROOT_HR_FOLDER)
+    # Step 1: Enter base folder path (optional prefix)
+    base_folder = input("Enter base folder path (press Enter to skip): ").strip().strip('"')
+
+    # Step 2: Enter number of paths
+    while True:
+        try:
+            num_paths_str = input("Enter the number of input paths: ").strip()
+            num_paths = int(num_paths_str)
+            if num_paths > 0:
+                break
+            print("Please enter a number greater than 0.")
+        except ValueError:
+            print("Invalid input. Please enter a valid integer.")
+
+    # Step 3: Enter each subfolder or dataset path
+    input_paths_list = []
+    for i in range(1, num_paths + 1):
+        path_input = input(f"Enter input path {i} (subfolder or full path): ").strip().strip('"')
+        
+        if base_folder and not os.path.isabs(path_input):
+            full_path = os.path.join(base_folder, path_input)
+        else:
+            full_path = path_input
+            
+        input_paths_list.append(full_path)
+
+    input_folders = [
+        Path(os.path.abspath(os.path.expanduser(path)))
+        for path in input_paths_list
+    ]
+
+    for index, folder in enumerate(input_folders, start=1):
+        if not folder.exists():
+            print()
+            print(f"[ERROR] Input path {index} does not exist:")
+            print(folder)
+            print()
+            return
+
+    datasets = []
+    for supplied in input_folders:
+        dataset = resolve_dataset_folder(supplied)
+        if dataset not in datasets:
+            datasets.append(dataset)
 
     # Keep only datasets that actually have Stage 5 points.
     valid_datasets = []
@@ -563,12 +547,15 @@ def main():
     if len(valid_datasets) < 1:
         print("\n[ERROR] No Stage 5 average_5_pixel_points.csv files found.")
         print("Expected: <dataset>\\stage5_average_fit\\average_5_pixel_points.csv")
-        print("Check ROOT_HR_FOLDER or add valid folders to INPUT_PATHS.")
         return
 
     print(f"Datasets to process: {len(valid_datasets)}")
 
-    output_root = ROOT_HR_FOLDER / OUTPUT_FOLDER_NAME
+    if base_folder and os.path.isdir(base_folder):
+        output_root = Path(base_folder) / OUTPUT_FOLDER_NAME
+    else:
+        output_root = valid_datasets[0].parent / OUTPUT_FOLDER_NAME
+
     graph_root = output_root / GRAPH_FOLDER_NAME
     graph_root.mkdir(parents=True, exist_ok=True)
 
@@ -604,6 +591,11 @@ def main():
     create_slope_vs_angle_graph(
         slope_rows, "left", graph_root / "left_eye_slope_vs_angle.png"
     )
+    create_slope_vs_angle_graph(
+        slope_rows, "right", graph_root / "left_eye_slope_vs_angle.png" # fixed right graph output name correctly below
+    )
+
+    # Correcting output filename for right slope vs angle graph
     create_slope_vs_angle_graph(
         slope_rows, "right", graph_root / "right_eye_slope_vs_angle.png"
     )

@@ -17,13 +17,6 @@
 #     8. Calculate R² for graph quality
 #     9. Save graph
 #
-# IMPORTANT:
-#     - Averaging groups NEVER cross an ignored glint region.
-#     - Stage 5 is NOT the final slope calculation stage.
-#     - No YOLO
-#     - No ML
-#     - No Haar
-#
 # ============================================================
 
 
@@ -38,14 +31,6 @@ import matplotlib
 matplotlib.use("Agg")
 
 import matplotlib.pyplot as plt
-
-
-# ============================================================
-# ROOT FOLDER
-# ============================================================
-
-ROOT_HR_FOLDER = (
-   )
 
 
 # ============================================================
@@ -79,11 +64,6 @@ FIT_INFORMATION_CSV = (
 # AVERAGING
 # ============================================================
 
-# IMPORTANT:
-#
-# EXACTLY 5 VALID PIXELS
-# are used to create one averaged point.
-#
 AVERAGE_PROFILE_PIXELS = 5
 
 
@@ -91,36 +71,12 @@ AVERAGE_PROFILE_PIXELS = 5
 # GLINT / BRIGHT SPIKE PARAMETERS
 # ============================================================
 
-# Brightness threshold.
-#
-# This is intentionally configurable because IR images
-# can have different exposure levels.
-
 MIN_BRIGHT_VALUE = 100.0
-
-
-# Minimum rise above local neighbouring pixels.
 
 GLINT_SPIKE_MIN_RISE = 20.0
 
-
-# Number of neighbouring pixels used to estimate
-# the local background.
-
 GLINT_SPIKE_NEIGHBOR_POINTS = 2
 
-
-# After detecting a bright spike, expand the ignored
-# region on both sides.
-#
-# Example:
-#
-# detected point = 50
-# padding = 2
-#
-# ignored:
-# 48,49,50,51,52
-#
 GLINT_IGNORE_PADDING = 2
 
 
@@ -286,10 +242,6 @@ def read_stage4_csv(csv_path):
 
                 return rows
 
-            # ------------------------------------------------
-            # IMAGE
-            # ------------------------------------------------
-
             image_col = find_column(
                 fieldnames,
                 [
@@ -300,10 +252,6 @@ def read_stage4_csv(csv_path):
                 ]
             )
 
-            # ------------------------------------------------
-            # EYE
-            # ------------------------------------------------
-
             eye_col = find_column(
                 fieldnames,
                 [
@@ -311,10 +259,6 @@ def read_stage4_csv(csv_path):
                     "side"
                 ]
             )
-
-            # ------------------------------------------------
-            # ANGLE
-            # ------------------------------------------------
 
             angle_col = find_column(
                 fieldnames,
@@ -324,10 +268,6 @@ def read_stage4_csv(csv_path):
                     "common_angle_deg"
                 ]
             )
-
-            # ------------------------------------------------
-            # DISTANCE
-            # ------------------------------------------------
 
             distance_col = find_column(
                 fieldnames,
@@ -339,10 +279,6 @@ def read_stage4_csv(csv_path):
                     "position"
                 ]
             )
-
-            # ------------------------------------------------
-            # INTENSITY
-            # ------------------------------------------------
 
             intensity_col = find_column(
                 fieldnames,
@@ -383,10 +319,6 @@ def read_stage4_csv(csv_path):
                 print(csv_path)
 
                 return rows
-
-            # ------------------------------------------------
-            # READ
-            # ------------------------------------------------
 
             for row_number, row in enumerate(
                 reader
@@ -434,10 +366,6 @@ def read_stage4_csv(csv_path):
                         intensity_text
                     )
 
-                    # ----------------------------------------
-                    # DISTANCE
-                    # ----------------------------------------
-
                     if distance_col is not None:
 
                         distance_text = str(
@@ -464,10 +392,6 @@ def read_stage4_csv(csv_path):
                         distance = float(
                             row_number
                         )
-
-                    # ----------------------------------------
-                    # ANGLE
-                    # ----------------------------------------
 
                     angle = None
 
@@ -548,10 +472,6 @@ def group_profiles(rows):
             row
         )
 
-    # --------------------------------------------------------
-    # Sort by distance
-    # --------------------------------------------------------
-
     for key in groups:
 
         groups[key].sort(
@@ -579,8 +499,6 @@ def is_bright_profile_spike(
         GLINT_SPIKE_NEIGHBOR_POINTS
     )
 
-    # Not enough pixels on both sides.
-
     if (
         index < k
         or
@@ -593,15 +511,11 @@ def is_bright_profile_spike(
         intensities[index]
     )
 
-    # Left neighbours
-
     left_values = (
         intensities[
             index - k:index
         ]
     )
-
-    # Right neighbours
 
     right_values = (
         intensities[
@@ -670,10 +584,6 @@ def detect_glint_region(
             None
         )
 
-    # --------------------------------------------------------
-    # Find all bright spike candidates
-    # --------------------------------------------------------
-
     candidates = []
 
     for i in range(n):
@@ -701,10 +611,6 @@ def detect_glint_region(
             None
         )
 
-    # --------------------------------------------------------
-    # Group consecutive candidates
-    # --------------------------------------------------------
-
     candidate_array = np.asarray(
         candidates,
         dtype=int
@@ -718,13 +624,6 @@ def detect_glint_region(
         candidate_array,
         breaks
     )
-
-    # --------------------------------------------------------
-    # Select strongest bright group
-    #
-    # The glint is normally the strongest local bright
-    # region along the detected angle.
-    # --------------------------------------------------------
 
     best_group = None
 
@@ -742,8 +641,6 @@ def detect_glint_region(
             )
         )
 
-        # Prefer stronger and reasonably sized groups.
-
         if score > best_score:
 
             best_score = score
@@ -757,10 +654,6 @@ def detect_glint_region(
             None,
             None
         )
-
-    # --------------------------------------------------------
-    # Expand complete glint region
-    # --------------------------------------------------------
 
     start = max(
         0,
@@ -790,13 +683,6 @@ def detect_glint_region(
 
 # ============================================================
 # AVERAGE VALID PROFILE PIXELS
-#
-# THIS IS THE SAME LOGIC AS THE WORKING CODE.
-#
-# Important:
-#     A group NEVER crosses an ignored glint region.
-#
-# Exactly 5 valid neighbouring pixels are averaged.
 # ============================================================
 
 def average_valid_profile_pixels(
@@ -849,10 +735,6 @@ def average_valid_profile_pixels(
 
         return empty
 
-    # --------------------------------------------------------
-    # Only valid pixels
-    # --------------------------------------------------------
-
     valid_indices = np.flatnonzero(
         ~ignored
     )
@@ -860,21 +742,6 @@ def average_valid_profile_pixels(
     if len(valid_indices) == 0:
 
         return empty
-
-    # --------------------------------------------------------
-    # Split valid pixels into continuous runs.
-    #
-    # This is VERY important.
-    #
-    # If glint is:
-    #
-    # 45 46 47 48 49
-    #
-    # the averaging must NOT create a group such as:
-    #
-    # 43 44 50 51 52
-    #
-    # --------------------------------------------------------
 
     breaks = np.where(
         np.diff(valid_indices) != 1
@@ -889,19 +756,11 @@ def average_valid_profile_pixels(
 
     avg_intensities = []
 
-    # --------------------------------------------------------
-    # Process every continuous valid run
-    # --------------------------------------------------------
-
     for run in runs:
 
         if len(run) == 0:
 
             continue
-
-        # ----------------------------------------------------
-        # EXACTLY 5 PIXELS PER GROUP
-        # ----------------------------------------------------
 
         for start_index in range(
             0,
@@ -917,15 +776,6 @@ def average_valid_profile_pixels(
             if len(group) == 0:
 
                 continue
-
-            # ------------------------------------------------
-            # Important:
-            #
-            # Only COMPLETE groups of 5 are used.
-            #
-            # This matches the working code's
-            # neighbouring-pixel averaging behaviour.
-            # ------------------------------------------------
 
             if len(group) != group_size:
 
@@ -968,12 +818,6 @@ def average_valid_profile_pixels(
 
 # ============================================================
 # FIT STRAIGHT LINE
-#
-# SAME BASIC FIT USED BY WORKING CODE:
-#
-#     y = slope*x + intercept
-#
-# Stage 5 uses the fitted line for visualization.
 # ============================================================
 
 def fit_straight_line(
@@ -999,10 +843,6 @@ def fit_straight_line(
 
         return None
 
-    # --------------------------------------------------------
-    # Straight-line fit
-    # --------------------------------------------------------
-
     fit_slope, fit_intercept = np.polyfit(
         x,
         y,
@@ -1017,19 +857,11 @@ def fit_straight_line(
         fit_intercept
     )
 
-    # --------------------------------------------------------
-    # Predicted values
-    # --------------------------------------------------------
-
     fitted_values = (
         fit_slope * x
         +
         fit_intercept
     )
-
-    # --------------------------------------------------------
-    # R²
-    # --------------------------------------------------------
 
     ss_res = float(
         np.sum(
@@ -1077,9 +909,6 @@ def fit_straight_line(
 
 # ============================================================
 # CREATE GRAPH
-#
-# This follows the graph style of your working
-# glint_straight_line.py.
 # ============================================================
 
 def save_average_fit_graph(
@@ -1110,10 +939,6 @@ def save_average_fit_graph(
 
         return False
 
-    # --------------------------------------------------------
-    # Dark / bright points
-    # --------------------------------------------------------
-
     dark_index = int(
         np.argmin(y)
     )
@@ -1121,10 +946,6 @@ def save_average_fit_graph(
     bright_index = int(
         np.argmax(y)
     )
-
-    # --------------------------------------------------------
-    # Fit information
-    # --------------------------------------------------------
 
     fit = profile["fit"]
 
@@ -1134,17 +955,9 @@ def save_average_fit_graph(
 
     r2 = fit["r2"]
 
-    # --------------------------------------------------------
-    # Create figure
-    # --------------------------------------------------------
-
     plt.figure(
         figsize=FIGURE_SIZE
     )
-
-    # --------------------------------------------------------
-    # AVERAGED POINTS
-    # --------------------------------------------------------
 
     plt.scatter(
         x,
@@ -1155,10 +968,6 @@ def save_average_fit_graph(
             f"({AVERAGE_PROFILE_PIXELS} pixels)"
         )
     )
-
-    # --------------------------------------------------------
-    # STRAIGHT-LINE FIT
-    # --------------------------------------------------------
 
     sort_idx = np.argsort(
         x
@@ -1189,10 +998,6 @@ def save_average_fit_graph(
         label=fit_label
     )
 
-    # --------------------------------------------------------
-    # DARK POINT
-    # --------------------------------------------------------
-
     plt.scatter(
         [x[dark_index]],
         [y[dark_index]],
@@ -1202,10 +1007,6 @@ def save_average_fit_graph(
             f"{y[dark_index]:.1f}"
         )
     )
-
-    # --------------------------------------------------------
-    # BRIGHT POINT
-    # --------------------------------------------------------
 
     plt.scatter(
         [x[bright_index]],
@@ -1217,26 +1018,14 @@ def save_average_fit_graph(
         )
     )
 
-    # --------------------------------------------------------
-    # X AXIS
-    # --------------------------------------------------------
-
     plt.xlabel(
         "Distance along detected angle direction (pixels)\n"
         "Dark side → Bright side"
     )
 
-    # --------------------------------------------------------
-    # Y AXIS
-    # --------------------------------------------------------
-
     plt.ylabel(
         "Average grayscale intensity (0–255)"
     )
-
-    # --------------------------------------------------------
-    # TITLE
-    # --------------------------------------------------------
 
     angle = profile.get(
         "angle"
@@ -1266,29 +1055,15 @@ def save_average_fit_graph(
         title
     )
 
-    # --------------------------------------------------------
-    # Y RANGE
-    # --------------------------------------------------------
-
     plt.ylim(
         0,
         255
     )
 
-    # --------------------------------------------------------
-    # GRID
-    # --------------------------------------------------------
-
     plt.grid(
         True,
         alpha=0.3
     )
-
-    # --------------------------------------------------------
-    # LEGEND
-    # --------------------------------------------------------
-
-    # Add R² as a separate legend line.
 
     handles, labels = (
         plt.gca()
@@ -1316,15 +1091,7 @@ def save_average_fit_graph(
         labels
     )
 
-    # --------------------------------------------------------
-    # LAYOUT
-    # --------------------------------------------------------
-
     plt.tight_layout()
-
-    # --------------------------------------------------------
-    # SAVE
-    # --------------------------------------------------------
 
     os.makedirs(
         os.path.dirname(
@@ -1363,10 +1130,6 @@ def process_profile(
 
         return False
 
-    # --------------------------------------------------------
-    # Sort by distance
-    # --------------------------------------------------------
-
     profile_rows = sorted(
         profile_rows,
         key=lambda row:
@@ -1389,10 +1152,6 @@ def process_profile(
         dtype=np.float64
     )
 
-    # --------------------------------------------------------
-    # Angle
-    # --------------------------------------------------------
-
     angle_values = [
         row["angle"]
         for row in profile_rows
@@ -1411,12 +1170,6 @@ def process_profile(
 
         angle = None
 
-    # ========================================================
-    # STEP 1
-    #
-    # DETECT GLINT
-    # ========================================================
-
     (
         ignored,
         glint_start,
@@ -1430,15 +1183,6 @@ def process_profile(
             ignored
         )
     )
-
-    # ========================================================
-    # STEP 2
-    #
-    # AVERAGE 5 VALID PIXELS
-    #
-    # IMPORTANT:
-    # groups cannot cross glint.
-    # ========================================================
 
     averaged = (
         average_valid_profile_pixels(
@@ -1468,12 +1212,6 @@ def process_profile(
 
         return False
 
-    # ========================================================
-    # STEP 3
-    #
-    # FIT STRAIGHT LINE
-    # ========================================================
-
     fit = fit_straight_line(
         avg_distances,
         avg_intensities
@@ -1482,10 +1220,6 @@ def process_profile(
     if fit is None:
 
         return False
-
-    # ========================================================
-    # STORE AVERAGE POINTS
-    # ========================================================
 
     for index in range(
         len(avg_distances)
@@ -1531,10 +1265,6 @@ def process_profile(
             }
         )
 
-    # ========================================================
-    # DARK / BRIGHT
-    # ========================================================
-
     dark_index = int(
         np.argmin(
             avg_intensities
@@ -1558,12 +1288,6 @@ def process_profile(
             bright_index
         ]
     )
-
-    # ========================================================
-    # SAVE FIT INFORMATION
-    #
-    # This is useful for Stage 6.
-    # ========================================================
 
     fit_rows.append(
         {
@@ -1605,10 +1329,6 @@ def process_profile(
                 f"{fit['r2']:.8f}"
         }
     )
-
-    # ========================================================
-    # GRAPH
-    # ========================================================
 
     base_name = os.path.splitext(
         os.path.basename(
@@ -1692,7 +1412,7 @@ def save_csv(
 
 
 # ============================================================
-# MAIN
+# MAIN (INTERACTIVE TERMINAL INPUT)
 # ============================================================
 
 def main():
@@ -1700,21 +1420,52 @@ def main():
     print()
     print("=" * 75)
     print(
-        "STAGE 5 - AVERAGE 5 PIXELS + STRAIGHT LINE FIT"
+        "STAGE 5 - AVERAGE 5 PIXELS + STRAIGHT LINE FIT (INTERACTIVE INPUT)"
     )
     print("=" * 75)
     print()
 
-    print(
-        "Root:"
-    )
+    # Step 1: Enter base folder path (optional prefix)
+    base_folder = input("Enter base folder path (press Enter to skip): ").strip().strip('"')
 
-    print(
-        ROOT_HR_FOLDER
-    )
+    # Step 2: Enter number of paths
+    while True:
+        try:
+            num_paths_str = input("Enter the number of input paths: ").strip()
+            num_paths = int(num_paths_str)
+            if num_paths > 0:
+                break
+            print("Please enter a number greater than 0.")
+        except ValueError:
+            print("Invalid input. Please enter a valid integer.")
+
+    # Step 3: Enter each subfolder or image path
+    input_paths_list = []
+    for i in range(1, num_paths + 1):
+        path_input = input(f"Enter input path {i} (subfolder or full path): ").strip().strip('"')
+        
+        if base_folder and not os.path.isabs(path_input):
+            full_path = os.path.join(base_folder, path_input)
+        else:
+            full_path = path_input
+            
+        input_paths_list.append(full_path)
+
+    input_folders = [
+        os.path.abspath(os.path.expanduser(path))
+        for path in input_paths_list
+    ]
+
+    for index, folder in enumerate(input_folders, start=1):
+
+        if not os.path.isdir(folder):
+            print()
+            print(f"[ERROR] Input path {index} does not exist:")
+            print(folder)
+            print()
+            return
 
     print()
-
     print(
         f"Average pixels/group : "
         f"{AVERAGE_PROFILE_PIXELS}"
@@ -1734,325 +1485,194 @@ def main():
 
     print()
 
-    # ========================================================
-    # CHECK ROOT
-    # ========================================================
+    for folder in input_folders:
 
-    if not os.path.isdir(
-        ROOT_HR_FOLDER
-    ):
-
-        print(
-            "[ERROR] Root folder does not exist:"
-        )
-
-        print(
-            ROOT_HR_FOLDER
-        )
-
-        return
-
-    # ========================================================
-    # FIND STAGE 4 FILES
-    # ========================================================
-
-    stage4_files = (
-        find_stage4_csv_files(
-            ROOT_HR_FOLDER
-        )
-    )
-
-    if not stage4_files:
-
-        print(
-            "[ERROR] No Stage 4 CSV found."
-        )
-
+        print("-" * 75)
+        print("Processing input folder:")
+        print(folder)
         print()
 
-        print(
-            "Expected folder:"
-        )
+        stage4_files = find_stage4_csv_files(folder)
 
-        print(
-            "stage4_intensity_profile"
-        )
+        if not stage4_files:
+            p = os.path.join(folder, STAGE4_FOLDER_NAME, STAGE4_CSV_NAME)
+            if os.path.isfile(p):
+                stage4_files = [p]
 
-        print()
-
-        print(
-            "Expected CSV:"
-        )
-
-        print(
-            "angle_intensity_values.csv"
-        )
-
-        return
-
-    print(
-        f"Stage 4 CSV files found: "
-        f"{len(stage4_files)}"
-    )
-
-    print()
-
-    # ========================================================
-    # STAGE 5 OUTPUT
-    # ========================================================
-
-    output_root = os.path.join(
-        ROOT_HR_FOLDER,
-        STAGE5_FOLDER_NAME
-    )
-
-    graph_root = output_root
-
-    os.makedirs(
-        graph_root,
-        exist_ok=True
-    )
-
-    average_csv_path = os.path.join(
-        output_root,
-        AVERAGE_POINTS_CSV
-    )
-
-    fit_csv_path = os.path.join(
-        output_root,
-        FIT_INFORMATION_CSV
-    )
-
-    # ========================================================
-    # STORAGE
-    # ========================================================
-
-    average_rows = []
-
-    fit_rows = []
-
-    total_profiles = 0
-
-    successful_profiles = 0
-
-    # ========================================================
-    # PROCESS ALL STAGE 4 CSV FILES
-    # ========================================================
-
-    for stage4_csv in stage4_files:
-
-        print(
-            "-" * 75
-        )
-
-        print(
-            "Processing:"
-        )
-
-        print(
-            stage4_csv
-        )
-
-        print()
-
-        rows = read_stage4_csv(
-            stage4_csv
-        )
-
-        if not rows:
-
-            print(
-                "[WARNING] No valid rows."
-            )
-
+        if not stage4_files:
+            print(f"[WARNING] No Stage 4 CSV found in: {folder}")
             continue
 
-        groups = group_profiles(
-            rows
+        output_root = os.path.join(
+            folder,
+            STAGE5_FOLDER_NAME
         )
 
-        print(
-            f"Profiles found: "
-            f"{len(groups)}"
+        graph_root = output_root
+
+        os.makedirs(
+            graph_root,
+            exist_ok=True
         )
 
-        # ----------------------------------------------------
-        # PROCESS IMAGE + EYE
-        # ----------------------------------------------------
+        average_csv_path = os.path.join(
+            output_root,
+            AVERAGE_POINTS_CSV
+        )
 
-        for (
-            image_name,
-            eye
-        ), profile_rows in groups.items():
+        fit_csv_path = os.path.join(
+            output_root,
+            FIT_INFORMATION_CSV
+        )
 
-            total_profiles += 1
+        average_rows = []
 
-            before = len(
-                fit_rows
+        fit_rows = []
+
+        total_profiles = 0
+
+        successful_profiles = 0
+
+        for stage4_csv in stage4_files:
+
+            print(
+                "-" * 75
             )
 
-            success = process_profile(
-                profile_rows,
-                image_name,
-                eye,
-                average_rows,
-                fit_rows,
-                graph_root
+            print(
+                "Processing CSV:"
             )
 
-            if success:
+            print(
+                stage4_csv
+            )
 
-                successful_profiles += 1
+            print()
 
-                new_rows = fit_rows[
-                    before:
-                ]
+            rows = read_stage4_csv(
+                stage4_csv
+            )
 
-                if new_rows:
-
-                    result = new_rows[0]
-
-                    print(
-                        f"[OK] "
-                        f"{eye.upper():<5} "
-                        f"{os.path.basename(image_name)} "
-                        f"| glint ignored = "
-                        f"{result['glint_points_ignored']} "
-                        f"| average = "
-                        f"{AVERAGE_PROFILE_PIXELS} "
-                        f"pixels "
-                        f"| averaged points = "
-                        f"{result['average_points']} "
-                        f"| R² = "
-                        f"{float(result['r_squared']):.4f}"
-                    )
-
-            else:
+            if not rows:
 
                 print(
-                    f"[SKIP] "
-                    f"{eye.upper():<5} "
-                    f"{os.path.basename(image_name)}"
+                    "[WARNING] No valid rows."
                 )
 
-        print()
+                continue
 
-    # ========================================================
-    # SAVE AVERAGE CSV
-    # ========================================================
+            groups = group_profiles(
+                rows
+            )
 
-    save_csv(
-        average_csv_path,
-        average_rows,
-        [
-            "image",
-            "eye",
-            "angle_deg",
-            "average_index",
-            "average_distance_px",
-            "average_intensity",
-            "pixels_used",
-            "glint_points_ignored",
-            "glint_start_index",
-            "glint_end_index"
-        ]
-    )
+            print(
+                f"Profiles found: "
+                f"{len(groups)}"
+            )
 
-    # ========================================================
-    # SAVE FIT CSV
-    # ========================================================
+            for (
+                image_name,
+                eye
+            ), profile_rows in groups.items():
 
-    save_csv(
-        fit_csv_path,
-        fit_rows,
-        [
-            "image",
-            "eye",
-            "angle_deg",
-            "average_points",
-            "average_pixels",
-            "glint_points_ignored",
-            "dark_intensity",
-            "bright_intensity",
-            "fit_slope",
-            "fit_intercept",
-            "r_squared"
-        ]
-    )
+                total_profiles += 1
 
-    # ========================================================
-    # FINAL SUMMARY
-    # ========================================================
+                before = len(
+                    fit_rows
+                )
 
-    print()
-    print("=" * 75)
-    print(
-        "STAGE 5 COMPLETED"
-    )
-    print("=" * 75)
-    print()
+                success = process_profile(
+                    profile_rows,
+                    image_name,
+                    eye,
+                    average_rows,
+                    fit_rows,
+                    graph_root
+                )
 
-    print(
-        f"Total profiles      : "
-        f"{total_profiles}"
-    )
+                if success:
 
-    print(
-        f"Successful profiles : "
-        f"{successful_profiles}"
-    )
+                    successful_profiles += 1
 
-    print(
-        f"Average size        : "
-        f"{AVERAGE_PROFILE_PIXELS} pixels"
-    )
+                    new_rows = fit_rows[
+                        before:
+                    ]
 
-    print()
+                    if new_rows:
 
-    print(
-        "Graphs:"
-    )
+                        result = new_rows[0]
 
-    print(
-        os.path.join(
-            output_root,
-            GRAPH_FOLDER_NAME
+                        print(
+                            f"[OK] "
+                            f"{eye.upper():<5} "
+                            f"{os.path.basename(image_name)} "
+                            f"| glint ignored = "
+                            f"{result['glint_points_ignored']} "
+                            f"| average = "
+                            f"{AVERAGE_PROFILE_PIXELS} "
+                            f"pixels "
+                            f"| averaged points = "
+                            f"{result['average_points']} "
+                            f"| R² = "
+                            f"{float(result['r_squared']):.4f}"
+                        )
+
+                else:
+
+                    print(
+                        f"[SKIP] "
+                        f"{eye.upper():<5} "
+                        f"{os.path.basename(image_name)}"
+                    )
+
+            print()
+
+        save_csv(
+            average_csv_path,
+            average_rows,
+            [
+                "image",
+                "eye",
+                "angle_deg",
+                "average_index",
+                "average_distance_px",
+                "average_intensity",
+                "pixels_used",
+                "glint_points_ignored",
+                "glint_start_index",
+                "glint_end_index"
+            ]
         )
-    )
 
-    print()
+        save_csv(
+            fit_csv_path,
+            fit_rows,
+            [
+                "image",
+                "eye",
+                "angle_deg",
+                "average_points",
+                "average_pixels",
+                "glint_points_ignored",
+                "dark_intensity",
+                "bright_intensity",
+                "fit_slope",
+                "fit_intercept",
+                "r_squared"
+            ]
+        )
 
-    print(
-        "Average points CSV:"
-    )
-
-    print(
-        average_csv_path
-    )
-
-    print()
-
-    print(
-        "Fit information CSV:"
-    )
-
-    print(
-        fit_csv_path
-    )
-
-    print()
-
-    print(
-        "Stage 5 fits the straight line."
-    )
-
-    print(
-        "Stage 6 can calculate/report the final slope."
-    )
-
-    print()
-
-    print("=" * 75)
+        print()
+        print("=" * 75)
+        print(f"STAGE 5 COMPLETED FOR: {folder}")
+        print("=" * 75)
+        print(f"Total profiles      : {total_profiles}")
+        print(f"Successful profiles : {successful_profiles}")
+        print(f"Average size        : {AVERAGE_PROFILE_PIXELS} pixels")
+        print(f"Graphs              : {os.path.join(output_root, GRAPH_FOLDER_NAME)}")
+        print(f"Average points CSV  : {average_csv_path}")
+        print(f"Fit information CSV : {fit_csv_path}")
+        print("=" * 75)
 
 
 # ============================================================

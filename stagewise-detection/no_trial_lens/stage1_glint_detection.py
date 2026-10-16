@@ -9,26 +9,6 @@ import math
 
 
 # ============================================================
-# ROOT FOLDER
-# ============================================================
-
-ROOT_HR_FOLDER = (
-    
-)
-
-
-# ============================================================
-# 3 INPUT PATHS
-# ============================================================
-# Enter the three input folder paths directly here.
-# The program will process all 3 folders in one run.
-
-INPUT_PATHS = [
-   
-        ]
-
-
-# ============================================================
 # OUTPUT FOLDERS
 # ============================================================
 
@@ -81,7 +61,7 @@ MULTI_LEFT_GRAPH_FILE = "left_eye_slope_vs_angle.png"
 MULTI_RIGHT_GRAPH_FILE = "right_eye_slope_vs_angle.png"
 MULTI_SLOPE_ANGLE_CSV_FILE = "slope_vs_angle_3_inputs.csv"
 
-# Set to False if you do not want the 3-input comparison graphs.
+# Set to False if you do not want the multi-input comparison graphs.
 SAVE_MULTI_INPUT_GRAPHS = True
 
 
@@ -173,7 +153,6 @@ USE_LEGACY_FALLBACK = True
 # MASK / CIRCLE
 # ============================================================
 
-# Masks are stored inside the pupil-circle folder, so they are off.
 SAVE_MASKS = False
 DRAW_PUPIL_CIRCLE = True
 FILL_PUPIL_ON_OVERLAY = False
@@ -1042,8 +1021,6 @@ def compute_pupil_orientation(gray, p, glint=None):
         ORIENTATION_BLUR_SIGMA
     )
 
-    # IGNORE GLINT WHILE CALCULATING ORIENTATION
-
     if glint is not None:
 
         ex_r = max(3.0, ORIENTATION_GLINT_EXCLUDE_FRAC * r)
@@ -1180,13 +1157,6 @@ def average_valid_profile_pixels(
     ignored,
     group_size=5
 ):
-    """
-    Average neighbouring valid pixels.
-
-    Glint/spike samples are already marked in ``ignored``.
-    Averaging is done only inside continuous valid regions,
-    so a group can NEVER cross an ignored glint region.
-    """
 
     distances = np.asarray(distances, dtype=np.float64).reshape(-1)
     xs = np.asarray(xs, dtype=np.float64).reshape(-1)
@@ -1214,7 +1184,6 @@ def average_valid_profile_pixels(
     if len(valid_indices) == 0:
         return empty
 
-    # Split into continuous valid runs.
     breaks = np.where(np.diff(valid_indices) != 1)[0] + 1
 
     runs = np.split(valid_indices, breaks)
@@ -1251,13 +1220,6 @@ def average_valid_profile_pixels(
 
 # ============================================================
 # EXTRACT INTENSITY PROFILE
-#
-# When the scan reaches the bright glint:
-#     1. Detect glint
-#     2. Ignore it
-#     3. DO NOT STOP
-#     4. Continue to the next point
-# Then average neighbouring valid pixels and fit a line.
 # ============================================================
 
 def extract_angle_intensity_profile(gray, pupil, orientation, glint=None):
@@ -1305,8 +1267,6 @@ def extract_angle_intensity_profile(gray, pupil, orientation, glint=None):
     xs = xs[valid]
     ys = ys[valid]
 
-    # SAMPLE ORIGINAL IMAGE
-
     intensities = np.asarray(
         cv2.remap(
             gray,
@@ -1322,11 +1282,7 @@ def extract_angle_intensity_profile(gray, pupil, orientation, glint=None):
     xs = np.asarray(xs, dtype=np.float64).reshape(-1)
     ys = np.asarray(ys, dtype=np.float64).reshape(-1)
 
-    # GLINT IGNORE LOGIC
-
     ignored = np.zeros(len(intensities), dtype=bool)
-
-    # STEP 1: ignore points physically close to detected glint.
 
     if glint is not None:
 
@@ -1335,8 +1291,6 @@ def extract_angle_intensity_profile(gray, pupil, orientation, glint=None):
             if is_near_detected_glint(xs[i], ys[i], glint):
 
                 ignored[i] = True
-
-    # STEP 2: also detect a sudden bright spike.
 
     original_intensities = intensities.copy()
 
@@ -1350,8 +1304,6 @@ def extract_angle_intensity_profile(gray, pupil, orientation, glint=None):
             if original_intensities[i] >= MIN_BRIGHT_VALUE:
 
                 ignored[i] = True
-
-    # We DO NOT terminate at the ignored point.
 
     valid_profile = ~ignored
 
@@ -1368,8 +1320,6 @@ def extract_angle_intensity_profile(gray, pupil, orientation, glint=None):
 
     if len(filtered_intensities) < 3:
         return None
-
-    # AVERAGE NEIGHBOURING VALID PIXELS
 
     averaged = average_valid_profile_pixels(
         distances,
@@ -1390,8 +1340,6 @@ def extract_angle_intensity_profile(gray, pupil, orientation, glint=None):
 
     if len(avg_intensities) < 2:
         return None
-
-    # FIT STRAIGHT LINE TO AVERAGED POINTS
 
     fit_slope = None
     fit_intercept = None
@@ -1418,8 +1366,6 @@ def extract_angle_intensity_profile(gray, pupil, orientation, glint=None):
         else:
 
             fit_r2 = 1.0
-
-    # DARK / BRIGHT POINTS (from the AVERAGED profile)
 
     dark_index = int(np.argmin(avg_intensities))
 
@@ -1570,10 +1516,6 @@ def save_angle_intensity_graph(profile, output_path, image_name, eye):
 # ============================================================
 
 def save_slope_vs_angle_graph(slope_angle_rows, graph_path, csv_path):
-    """
-    X-axis = Angle (degrees), Y-axis = Slope.
-    One record per image + eye.
-    """
 
     if not slope_angle_rows:
         print("No valid slope-vs-angle data available.")
@@ -1706,12 +1648,10 @@ def save_slope_vs_angle_graph(slope_angle_rows, graph_path, csv_path):
 
 
 # ============================================================
-# SAVE 3-INPUT SLOPE vs ANGLE GRAPHS
+# SAVE MULTI-INPUT SLOPE vs ANGLE GRAPHS
 # ============================================================
 
 def save_multi_input_slope_vs_angle_graphs(all_rows, output_root):
-    """Create separate left-eye and right-eye slope-vs-angle graphs
-    containing data from up to three input folders."""
 
     if not all_rows:
         print("No multi-input slope-vs-angle data available.")
@@ -1723,7 +1663,6 @@ def save_multi_input_slope_vs_angle_graphs(all_rows, output_root):
 
     os.makedirs(output_root, exist_ok=True)
 
-    # One point per image + eye + input.
     unique = {}
 
     for row in all_rows:
@@ -1828,7 +1767,7 @@ def save_multi_input_slope_vs_angle_graphs(all_rows, output_root):
             plt.scatter(
                 x,
                 y,
-                marker=marker_list[idx],
+                marker=marker_list[idx % len(marker_list)],
                 s=45,
                 label=(
                     f"Input {idx + 1}: "
@@ -1841,7 +1780,7 @@ def save_multi_input_slope_vs_angle_graphs(all_rows, output_root):
         plt.xlabel("Angle (degrees)")
         plt.ylabel("Slope")
         plt.title(
-            f"{eye_name.capitalize()} Eye - Slope vs Angle (3 Inputs)"
+            f"{eye_name.capitalize()} Eye - Slope vs Angle (Multi-Input)"
         )
         plt.grid(True, alpha=0.3)
 
@@ -2475,7 +2414,6 @@ def process_and_save_folder(root_folder_path, display_visuals=False):
 
     intensity_root = os.path.join(root_folder_path, INTENSITY_PROFILE_FOLDER)
 
-    # Create ONLY the folders that are actually needed.
     if SAVE_RAW_CONTOUR_OUTPUT:
         os.makedirs(raw_contour_root, exist_ok=True)
 
@@ -2499,9 +2437,6 @@ def process_and_save_folder(root_folder_path, display_visuals=False):
         image_files.extend(glob.glob(pattern, recursive=True))
 
     image_files = sorted(set(image_files))
-
-    # NEVER PROCESS OUTPUT IMAGES
-    # (old output folders from earlier runs are still skipped)
 
     skip_names = {
         RAW_CONTOUR_FOLDER.lower(),
@@ -2573,12 +2508,7 @@ def process_and_save_folder(root_folder_path, display_visuals=False):
 
     intensity_csv_rows = []
 
-    # One record per image + eye for the slope-vs-angle graph.
     slope_angle_rows = []
-
-    # ========================================================
-    # PROCESS EVERY IMAGE
-    # ========================================================
 
     for image_path in image_files:
 
@@ -2605,8 +2535,6 @@ def process_and_save_folder(root_folder_path, display_visuals=False):
 
             both_found += 1
 
-        # ORIENTATION
-
         gray_full = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
         orientation = {"left": None, "right": None}
@@ -2621,15 +2549,10 @@ def process_and_save_folder(root_folder_path, display_visuals=False):
                     results.get(side)
                 )
 
-        # COMMON ORIENTATION
-
         orientation, common_orientation_deg = apply_common_orientation_angle(
             orientation,
             pupils
         )
-
-        # INTENSITY PROFILE
-        # dark point -> points -> BRIGHT GLINT -> IGNORE -> NEXT POINT
 
         intensity_profiles = {"left": None, "right": None}
 
@@ -2645,8 +2568,6 @@ def process_and_save_folder(root_folder_path, display_visuals=False):
                 )
 
         relative_path = os.path.relpath(image_path, root_folder_path)
-
-        # COLLECT INTENSITY / SLOPE DATA
 
         for side in ("left", "right"):
 
@@ -2671,7 +2592,6 @@ def process_and_save_folder(root_folder_path, display_visuals=False):
                     }
                 )
 
-            # Intensity CSV rows are only needed when that output is on.
             if SAVE_INTENSITY_PROFILE_OUTPUT:
 
                 for d, x, y, intensity in zip(
@@ -2698,13 +2618,6 @@ def process_and_save_folder(root_folder_path, display_visuals=False):
                         }
                     )
 
-        # ====================================================
-        # DISPLAY / SAVE OUTPUT
-        #
-        # Detection and calculations above are unchanged.
-        # Output image = original image + detected glint(s) only.
-        # ====================================================
-
         contour_img = image.copy()
         circle_img = image.copy()
 
@@ -2720,8 +2633,6 @@ def process_and_save_folder(root_folder_path, display_visuals=False):
 
             draw_glint(circle_img, right)
 
-        # RAW CONTOUR RESULTS  (the only output kept)
-
         if SAVE_RAW_CONTOUR_OUTPUT:
 
             contour_path = os.path.join(raw_contour_root, relative_path)
@@ -2730,8 +2641,6 @@ def process_and_save_folder(root_folder_path, display_visuals=False):
 
             cv2.imwrite(contour_path, contour_img)
 
-        # PUPIL CIRCLE RESULTS  (hidden)
-
         if SAVE_PUPIL_CIRCLE_OUTPUT:
 
             circle_path = os.path.join(circle_root, relative_path)
@@ -2739,8 +2648,6 @@ def process_and_save_folder(root_folder_path, display_visuals=False):
             os.makedirs(os.path.dirname(circle_path), exist_ok=True)
 
             cv2.imwrite(circle_path, circle_img)
-
-        # INTENSITY GRAPHS  (hidden)
 
         if SAVE_INTENSITY_PROFILE_GRAPHS and SAVE_INTENSITY_PROFILE_OUTPUT:
 
@@ -2766,8 +2673,6 @@ def process_and_save_folder(root_folder_path, display_visuals=False):
                         side
                     )
 
-        # PUPIL MASK  (hidden - lives in the pupil-circle folder)
-
         if SAVE_MASKS and SAVE_PUPIL_CIRCLE_OUTPUT:
 
             stem = os.path.splitext(relative_path)[0]
@@ -2783,8 +2688,6 @@ def process_and_save_folder(root_folder_path, display_visuals=False):
                     [pupils["left"], pupils["right"]]
                 )
             )
-
-        # CSV ROW
 
         row = {
             "image": relative_path,
@@ -2897,8 +2800,6 @@ def process_and_save_folder(root_folder_path, display_visuals=False):
             f"{_fmt_pupil(pupils['right'])}"
         )
 
-        # DISPLAY
-
         if display_visuals:
 
             cv2.imshow(
@@ -2918,8 +2819,6 @@ def process_and_save_folder(root_folder_path, display_visuals=False):
 
         cv2.destroyAllWindows()
 
-    # SAVE INTENSITY CSV  (hidden)
-
     if SAVE_INTENSITY_PROFILE_OUTPUT and intensity_csv_rows:
 
         intensity_csv_path = os.path.join(intensity_root, INTENSITY_PROFILE_CSV)
@@ -2937,8 +2836,6 @@ def process_and_save_folder(root_folder_path, display_visuals=False):
 
             iw.writerows(intensity_csv_rows)
 
-    # SAVE SLOPE vs ANGLE GRAPH (per folder; off by default)
-
     if SAVE_SLOPE_ANGLE_GRAPH and slope_angle_rows:
 
         slope_angle_root = os.path.join(
@@ -2954,8 +2851,6 @@ def process_and_save_folder(root_folder_path, display_visuals=False):
             os.path.join(slope_angle_root, SLOPE_ANGLE_CSV_FILE)
         )
 
-    # SAVE MAIN CSV  (hidden - lives in the pupil-circle folder)
-
     if SAVE_PUPIL_CIRCLE_OUTPUT and csv_rows:
 
         csv_path = os.path.join(circle_root, CSV_NAME)
@@ -2967,8 +2862,6 @@ def process_and_save_folder(root_folder_path, display_visuals=False):
             w.writeheader()
 
             w.writerows(csv_rows)
-
-    # FINAL SUMMARY
 
     n = max(n_done, 1)
 
@@ -2994,30 +2887,51 @@ def process_and_save_folder(root_folder_path, display_visuals=False):
     if SAVE_INTENSITY_PROFILE_OUTPUT:
         print(f"Angle intensity output      : {intensity_root}")
 
-    # Return the per-image/per-eye slope-angle records so the
-    # three-input comparison can be plotted after all inputs run.
     return slope_angle_rows
 
 
 # ============================================================
-# PROGRAM START
+# PROGRAM START (INTERACTIVE TERMINAL INPUT)
 # ============================================================
 
 if __name__ == "__main__":
 
     print()
     print("=" * 80)
-    print("3-INPUT SLOPE vs ANGLE PROCESSING")
+    print("INTERACTIVE INPUT PATH CONFIGURATION")
     print("=" * 80)
     print()
 
-    if len(INPUT_PATHS) <1:
-        print("ERROR: INPUT_PATHS must contain exactly 1 or more folder paths.")
-        sys.exit(1)
+    # Step 1: Enter base/root folder path (optional prefix)
+    base_folder = input("Enter base folder path (press Enter to skip): ").strip().strip('"')
+
+    # Step 2: Enter number of paths
+    while True:
+        try:
+            num_paths_str = input("Enter the number of input paths: ").strip()
+            num_paths = int(num_paths_str)
+            if num_paths > 0:
+                break
+            print("Please enter a number greater than 0.")
+        except ValueError:
+            print("Invalid input. Please enter a valid integer.")
+
+    # Step 3: Enter each subfolder or image path
+    input_paths_list = []
+    for i in range(1, num_paths + 1):
+        path_input = input(f"Enter input path {i} (subfolder or full path): ").strip().strip('"')
+        
+        # If base folder was provided and path is relative, combine them
+        if base_folder and not os.path.isabs(path_input):
+            full_path = os.path.join(base_folder, path_input)
+        else:
+            full_path = path_input
+            
+        input_paths_list.append(full_path)
 
     input_folders = [
-        os.path.abspath(os.path.expanduser(path.strip().strip('"')))
-        for path in INPUT_PATHS
+        os.path.abspath(os.path.expanduser(path))
+        for path in input_paths_list
     ]
 
     for index, folder in enumerate(input_folders, start=1):
@@ -3027,11 +2941,10 @@ if __name__ == "__main__":
             print(f"ERROR: Input path {index} does not exist:")
             print(folder)
             print()
-            print("Edit INPUT_PATHS near the top of the code.")
             sys.exit(1)
 
-    print("Input folders:")
-
+    print()
+    print("Input folders to process:")
     for i, folder in enumerate(input_folders, start=1):
         print(f"Input {i}: {folder}")
 
@@ -3061,17 +2974,15 @@ if __name__ == "__main__":
             new_row["input_label"] = folder_label
             all_slope_angle_rows.append(new_row)
 
-    # 3-INPUT COMPARISON GRAPHS (left eye + right eye)
-
     script_folder = os.path.dirname(os.path.abspath(__file__))
 
     multi_output_root = os.path.join(script_folder, MULTI_INPUT_OUTPUT_FOLDER)
 
-    if SAVE_MULTI_INPUT_GRAPHS:
+    if SAVE_MULTI_INPUT_GRAPHS and len(input_folders) > 1:
 
         print()
         print("=" * 80)
-        print("CREATING 3-INPUT COMPARISON GRAPHS")
+        print("CREATING MULTI-INPUT COMPARISON GRAPHS")
         print("=" * 80)
 
         save_multi_input_slope_vs_angle_graphs(

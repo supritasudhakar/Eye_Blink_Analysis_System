@@ -29,27 +29,7 @@ import numpy as np
 #
 #       angle_intensity_values.csv
 #
-#
-# IMPORTANT:
-#
-# - NO YOLO
-# - NO ML
-# - NO HAAR
-# - NO GLINT IGNORING
-# - NO GLINT REMOVAL
-# - NO GLINT SPIKE REJECTION
-# - GLINT IS INCLUDED IN THE PROFILE
-# - USES STAGE 3 ANGLE DIRECTLY
-#
 # ============================================================
-
-
-# ============================================================
-# ROOT FOLDER
-# ============================================================
-
-ROOT_HR_FOLDER = (
-    )
 
 
 # ============================================================
@@ -93,20 +73,10 @@ IMAGE_EXTENSIONS = (
 # PROFILE SETTINGS
 # ============================================================
 
-# Number of points sampled along the Stage 3 angle
 INTENSITY_PROFILE_SAMPLES = 101
 
-
-# Scan this fraction of the pupil radius
-# on both sides of the pupil center.
 INTENSITY_PROFILE_HALF_LENGTH_FRAC = 0.75
 
-
-# Average neighbouring profile pixels.
-#
-# Example:
-#   5 pixels -> 1 average intensity value
-#
 AVERAGE_PROFILE_PIXELS = 5
 
 
@@ -134,7 +104,6 @@ def find_files_recursive(
         root_folder
     ):
 
-        # Do not search inside Stage 4 outputs
         dirs[:] = [
             d for d in dirs
             if d.lower() != STAGE4_FOLDER.lower()
@@ -168,8 +137,6 @@ def find_all_images(
         root_folder
     ):
 
-        # Do not treat generated stage folders
-        # as original image folders.
         dirs[:] = [
             d for d in dirs
             if d.lower() not in (
@@ -262,8 +229,6 @@ def find_image(
         dataset_folder
     )
 
-    # Prefer an image belonging to the
-    # current dataset folder.
     local_candidates = []
 
     for path in candidates:
@@ -350,7 +315,6 @@ def load_stage2_contours(
                 ""
             ).strip().upper()
 
-            # Normalize eye labels
             if eye in (
                 "LEFT",
                 "LE"
@@ -732,15 +696,6 @@ def average_profile_pixels(
 # ============================================================
 # EXTRACT INTENSITY PROFILE
 # ============================================================
-#
-# THIS IS THE MAIN STAGE 4 CALCULATION.
-#
-# NO GLINT IS REMOVED.
-#
-# Every valid intensity value along the Stage 3
-# angle is included.
-#
-# ============================================================
 
 def extract_intensity_profile(
     gray,
@@ -756,10 +711,6 @@ def extract_intensity_profile(
 
         return None
 
-    # --------------------------------------------------------
-    # Pupil center
-    # --------------------------------------------------------
-
     center = calculate_pupil_center(
         contour
     )
@@ -770,10 +721,6 @@ def extract_intensity_profile(
 
     cx, cy = center
 
-    # --------------------------------------------------------
-    # Pupil radius
-    # --------------------------------------------------------
-
     radius = calculate_pupil_radius(
         contour,
         center
@@ -782,10 +729,6 @@ def extract_intensity_profile(
     if radius <= 1:
 
         return None
-
-    # ========================================================
-    # STAGE 3 ANGLE
-    # ========================================================
 
     angle_rad = math.radians(
         float(angle_deg)
@@ -799,10 +742,6 @@ def extract_intensity_profile(
         angle_rad
     )
 
-    # ========================================================
-    # CREATE SAMPLING DISTANCES
-    # ========================================================
-
     half_length = (
         INTENSITY_PROFILE_HALF_LENGTH_FRAC
         *
@@ -814,10 +753,6 @@ def extract_intensity_profile(
         half_length,
         INTENSITY_PROFILE_SAMPLES
     )
-
-    # ========================================================
-    # POINTS ALONG THE ANGLE
-    # ========================================================
 
     xs = (
         cx
@@ -832,10 +767,6 @@ def extract_intensity_profile(
     )
 
     height, width = gray.shape[:2]
-
-    # --------------------------------------------------------
-    # Keep points inside image
-    # --------------------------------------------------------
 
     image_valid = (
         (xs >= 0)
@@ -862,10 +793,6 @@ def extract_intensity_profile(
     if len(xs) < 3:
 
         return None
-
-    # ========================================================
-    # PUPIL MASK
-    # ========================================================
 
     pupil_mask = create_pupil_mask(
         gray,
@@ -926,23 +853,6 @@ def extract_intensity_profile(
 
         return None
 
-    # ========================================================
-    # SAMPLE GRAYSCALE INTENSITY
-    # ========================================================
-    #
-    # IMPORTANT:
-    #
-    # cv2.remap samples the actual image intensity.
-    #
-    # Therefore:
-    #
-    # dark region  -> included
-    # normal region -> included
-    # glint         -> INCLUDED
-    # bright region -> included
-    #
-    # ========================================================
-
     intensities = np.asarray(
         cv2.remap(
             gray,
@@ -963,10 +873,6 @@ def extract_intensity_profile(
     ) < 3:
 
         return None
-
-    # ========================================================
-    # AVERAGE NEIGHBOURING PIXELS
-    # ========================================================
 
     averaged = average_profile_pixels(
         distances,
@@ -998,29 +904,17 @@ def extract_intensity_profile(
 
         return None
 
-    # ========================================================
-    # DARK POINT
-    # ========================================================
-
     dark_index = int(
         np.argmin(
             intensities
         )
     )
 
-    # ========================================================
-    # BRIGHT POINT
-    # ========================================================
-
     bright_index = int(
         np.argmax(
             intensities
         )
     )
-
-    # ========================================================
-    # INTENSITY RANGE
-    # ========================================================
 
     dark_intensity = float(
         intensities[
@@ -1033,16 +927,6 @@ def extract_intensity_profile(
             bright_index
         ]
     )
-
-    # ========================================================
-    # SLOPE
-    # ========================================================
-    #
-    # Slope is calculated from ALL profile values.
-    #
-    # The glint is NOT removed before calculating slope.
-    #
-    # ========================================================
 
     slope = None
     intercept = None
@@ -1189,10 +1073,6 @@ def save_graph(
         figsize=(10, 6)
     )
 
-    # ========================================================
-    # COMPLETE INTENSITY PROFILE
-    # ========================================================
-
     plt.plot(
         distances,
         intensities,
@@ -1201,10 +1081,6 @@ def save_graph(
         linewidth=1.5,
         label="Intensity profile"
     )
-
-    # ========================================================
-    # DARK POINT
-    # ========================================================
 
     plt.scatter(
         [
@@ -1224,10 +1100,6 @@ def save_graph(
         )
     )
 
-    # ========================================================
-    # BRIGHT POINT
-    # ========================================================
-
     plt.scatter(
         [
             distances[
@@ -1245,10 +1117,6 @@ def save_graph(
             f"{intensities[bright_index]:.1f}"
         )
     )
-
-    # ========================================================
-    # LINEAR SLOPE
-    # ========================================================
 
     slope = profile.get(
         "slope"
@@ -1291,10 +1159,6 @@ def save_graph(
                 f"{slope:.4f}"
             )
         )
-
-    # ========================================================
-    # GRAPH LABELS
-    # ========================================================
 
     plt.xlabel(
         "Distance along Stage 3 angle (pixels)"
@@ -1370,10 +1234,6 @@ def process_dataset(
         stage2_csv_path
     )
 
-    # ========================================================
-    # DATASET FOLDER
-    # ========================================================
-
     stage3_folder = os.path.dirname(
         stage3_csv_path
     )
@@ -1382,10 +1242,6 @@ def process_dataset(
         stage3_folder
     )
 
-    # ========================================================
-    # LOAD DATA
-    # ========================================================
-
     contours = load_stage2_contours(
         stage2_csv_path
     )
@@ -1393,10 +1249,6 @@ def process_dataset(
     angles = load_stage3_angles(
         stage3_csv_path
     )
-
-    # ========================================================
-    # OUTPUT
-    # ========================================================
 
     output_folder = os.path.join(
         dataset_folder,
@@ -1416,10 +1268,6 @@ def process_dataset(
         )
 
     processed_profiles = 0
-
-    # ========================================================
-    # PROCESS EACH IMAGE
-    # ========================================================
 
     for image_name, angle_data in angles.items():
 
@@ -1459,10 +1307,6 @@ def process_dataset(
         normalized_image_name = normalize_name(
             image_name
         )
-
-        # ====================================================
-        # LEFT EYE
-        # ====================================================
 
         left_angle = angle_data.get(
             "left_angle"
@@ -1510,10 +1354,6 @@ def process_dataset(
                         display_name,
                         "left"
                     )
-
-                # ------------------------------------------------
-                # Save every profile point
-                # ------------------------------------------------
 
                 for i in range(
                     len(
@@ -1575,10 +1415,6 @@ def process_dataset(
                     f"angle = "
                     f"{left_angle:.2f}°"
                 )
-
-        # ====================================================
-        # RIGHT EYE
-        # ====================================================
 
         right_angle = angle_data.get(
             "right_angle"
@@ -1772,121 +1608,106 @@ def save_csv(
 
 
 # ============================================================
-# MAIN
+# MAIN (INTERACTIVE TERMINAL INPUT)
 # ============================================================
 
 def main():
 
     print()
     print("=" * 80)
-    print("STAGE 4 - INTENSITY PROFILE")
+    print("STAGE 4 - INTENSITY PROFILE (INTERACTIVE INPUT)")
     print("=" * 80)
+    print()
+
+    # Step 1: Enter base folder path (optional prefix)
+    base_folder = input("Enter base folder path (press Enter to skip): ").strip().strip('"')
+
+    # Step 2: Enter number of paths
+    while True:
+        try:
+            num_paths_str = input("Enter the number of input paths: ").strip()
+            num_paths = int(num_paths_str)
+            if num_paths > 0:
+                break
+            print("Please enter a number greater than 0.")
+        except ValueError:
+            print("Invalid input. Please enter a valid integer.")
+
+    # Step 3: Enter each subfolder or image path
+    input_paths_list = []
+    for i in range(1, num_paths + 1):
+        path_input = input(f"Enter input path {i} (subfolder or full path): ").strip().strip('"')
+        
+        if base_folder and not os.path.isabs(path_input):
+            full_path = os.path.join(base_folder, path_input)
+        else:
+            full_path = path_input
+            
+        input_paths_list.append(full_path)
+
+    input_folders = [
+        os.path.abspath(os.path.expanduser(path))
+        for path in input_paths_list
+    ]
+
+    for index, folder in enumerate(input_folders, start=1):
+        if not os.path.isdir(folder):
+            print()
+            print(f"[ERROR] Input path {index} does not exist:")
+            print(folder)
+            print()
+            return
+
+    stage2_csvs = []
+    stage3_csvs = []
+    image_files = []
+
+    for folder in input_folders:
+        s2_found = find_files_recursive(folder, STAGE2_CSV_NAME)
+        if s2_found:
+            stage2_csvs.extend(s2_found)
+        else:
+            p = os.path.join(folder, STAGE2_FOLDER, STAGE2_CSV_NAME)
+            if os.path.isfile(p):
+                stage2_csvs.append(p)
+
+        s3_found = find_files_recursive(folder, STAGE3_CSV_NAME)
+        if s3_found:
+            stage3_csvs.extend(s3_found)
+        else:
+            p = os.path.join(folder, STAGE3_FOLDER, STAGE3_CSV_NAME)
+            if os.path.isfile(p):
+                stage3_csvs.append(p)
+
+        img_found = find_all_images(folder)
+        if img_found:
+            image_files.extend(img_found)
+
+    stage2_csvs = sorted(set(stage2_csvs))
+    stage3_csvs = sorted(set(stage3_csvs))
+    image_files = sorted(set(image_files))
 
     print()
-    print(
-        "Root folder:"
-    )
-
-    print(
-        ROOT_HR_FOLDER
-    )
-
-    # ========================================================
-    # CHECK ROOT
-    # ========================================================
-
-    if not os.path.isdir(
-        ROOT_HR_FOLDER
-    ):
-
-        print()
-        print(
-            "[ERROR] Root folder does not exist."
-        )
-
-        return
-
-    # ========================================================
-    # FIND STAGE 2 CSV FILES
-    # ========================================================
-
-    stage2_csvs = find_files_recursive(
-        ROOT_HR_FOLDER,
-        STAGE2_CSV_NAME
-    )
-
-    # ========================================================
-    # FIND STAGE 3 CSV FILES
-    # ========================================================
-
-    stage3_csvs = find_files_recursive(
-        ROOT_HR_FOLDER,
-        STAGE3_CSV_NAME
-    )
-
-    print()
-    print(
-        f"Stage 2 CSV files found: "
-        f"{len(stage2_csvs)}"
-    )
-
-    print(
-        f"Stage 3 CSV files found: "
-        f"{len(stage3_csvs)}"
-    )
+    print(f"Stage 2 CSV files found : {len(stage2_csvs)}")
+    print(f"Stage 3 CSV files found : {len(stage3_csvs)}")
+    print(f"Original images found   : {len(image_files)}")
 
     if not stage2_csvs:
-
         print()
-        print(
-            "[ERROR] "
-            "Stage 2 pupil_raw_contour_points.csv "
-            "was not found."
-        )
-
+        print("[ERROR] Stage 2 pupil_raw_contour_points.csv was not found.")
         return
 
     if not stage3_csvs:
-
         print()
-        print(
-            "[ERROR] "
-            "Stage 3 pupil_angles.csv "
-            "was not found."
-        )
-
-        print()
-        print(
-            "Run stage3_angle.py first."
-        )
-
+        print("[ERROR] Stage 3 pupil_angles.csv was not found. Run stage3_angle.py first.")
         return
 
-    # ========================================================
-    # FIND ORIGINAL IMAGES
-    # ========================================================
+    if not image_files:
+        print()
+        print("[ERROR] Original images not found.")
+        return
 
-    print()
-    print(
-        "Searching original images..."
-    )
-
-    image_files = find_all_images(
-        ROOT_HR_FOLDER
-    )
-
-    print(
-        f"Original images found: "
-        f"{len(image_files)}"
-    )
-
-    image_index = build_image_index(
-        image_files
-    )
-
-    # ========================================================
-    # PROCESS STAGE 3 DATASETS
-    # ========================================================
+    image_index = build_image_index(image_files)
 
     all_rows = []
 
@@ -1899,10 +1720,6 @@ def main():
         dataset_folder = os.path.dirname(
             stage3_folder
         )
-
-        # ----------------------------------------------------
-        # Expected Stage 2 CSV
-        # ----------------------------------------------------
 
         expected_stage2_csv = os.path.join(
             dataset_folder,
@@ -1919,11 +1736,6 @@ def main():
             )
 
         else:
-
-            # ------------------------------------------------
-            # Search for Stage 2 CSV belonging
-            # to the same dataset.
-            # ------------------------------------------------
 
             matching_stage2 = []
 
@@ -1969,10 +1781,6 @@ def main():
                 matching_stage2[0]
             )
 
-        # ----------------------------------------------------
-        # Process dataset
-        # ----------------------------------------------------
-
         process_dataset(
             stage3_csv,
             stage2_csv,
@@ -1980,85 +1788,13 @@ def main():
             all_rows
         )
 
-    # ========================================================
-    # SAVE CSV
-    # ========================================================
-
-    if SAVE_CSV:
-
-        save_csv(
-            ROOT_HR_FOLDER,
-            all_rows
-        )
-
-    # ========================================================
-    # COMPLETE
-    # ========================================================
+    if SAVE_CSV and all_rows:
+        for folder in input_folders:
+            save_csv(folder, all_rows)
 
     print()
     print("=" * 80)
     print("STAGE 4 COMPLETED")
-    print("=" * 80)
-
-    print()
-    print(
-        "Stage 4 procedure:"
-    )
-
-    print()
-    print(
-        "Stage 2 raw pupil contour"
-    )
-
-    print(
-        "        ↓"
-    )
-
-    print(
-        "Stage 3 detected angle"
-    )
-
-    print(
-        "        ↓"
-    )
-
-    print(
-        "Sample grayscale intensity"
-    )
-
-    print(
-        "        ↓"
-    )
-
-    print(
-        "Include ALL valid points"
-    )
-
-    print(
-        "        ↓"
-    )
-
-    print(
-        "Include bright glint"
-    )
-
-    print(
-        "        ↓"
-    )
-
-    print(
-        "Average neighbouring pixels"
-    )
-
-    print(
-        "        ↓"
-    )
-
-    print(
-        "Intensity profile graph"
-    )
-
-    print()
     print("=" * 80)
 
 

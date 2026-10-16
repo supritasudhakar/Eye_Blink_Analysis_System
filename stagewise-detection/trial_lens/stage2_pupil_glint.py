@@ -1,4 +1,3 @@
-
 #!/usr/bin/env python3
 """
 STAGE 2: DETECT GLINT ONLY INSIDE THE STAGE 1 PUPIL MASKS
@@ -19,30 +18,10 @@ Important:
 
 from pathlib import Path
 import csv
+import os
 
 import cv2
 import numpy as np
-
-
-# ============================================================
-# 1. PATHS: CHANGE THESE TO YOUR ACTUAL STAGE 1 FOLDER
-# ============================================================
-
-# This folder contains your original images AND the Stage 1
-# output subfolders, as in your provided pupil detection code.
-#
-# If your current dataset is the Sph_-3.5 folder, replace the
-# example path below with that actual dataset folder.
-BASE_FOLDER = Path(
-    )
-
-ORIGINAL_FOLDER = BASE_FOLDER
-ANNOTATED_FOLDER = BASE_FOLDER / "annotated"
-MASK_FOLDER = BASE_FOLDER / "masks"
-STAGE1_CSV = BASE_FOLDER / "csv" / "results.csv"
-
-# Keep Stage 2 results separate.
-OUTPUT_FOLDER = BASE_FOLDER / "stage2_glint"
 
 
 # ============================================================
@@ -225,10 +204,8 @@ def detect_glint_inside_pupil(gray, pupil_mask, safe_mask):
     if pupil_values.size < 20:
         return None, 0
 
-    # A robust measure of the usual pupil brightness.
     pupil_median = float(np.median(pupil_values))
 
-    # Adapt the threshold to this image's illumination.
     percentile_value = float(
         np.percentile(
             pupil_values,
@@ -243,8 +220,6 @@ def detect_glint_inside_pupil(gray, pupil_mask, safe_mask):
 
     bright_threshold = min(bright_threshold, 255.0)
 
-    # Estimate the surrounding brightness at each pixel.
-    # Small, sharp reflections stand out from this background.
     gray_float = gray.astype(np.float32)
 
     local_background = cv2.GaussianBlur(
@@ -256,8 +231,6 @@ def detect_glint_inside_pupil(gray, pupil_mask, safe_mask):
 
     local_contrast = gray_float - local_background
 
-    # IMPORTANT: restrict every candidate to the eroded
-    # pupil mask. Outside reflections cannot become candidates.
     candidate_pixels = (
         (gray_float >= bright_threshold) &
         (local_contrast >= MIN_LOCAL_CONTRAST) &
@@ -266,7 +239,6 @@ def detect_glint_inside_pupil(gray, pupil_mask, safe_mask):
 
     candidate_binary = candidate_pixels.astype(np.uint8)
 
-    # Find separate connected bright components.
     number, labels, stats, centroids = (
         cv2.connectedComponentsWithStats(
             candidate_binary,
@@ -298,8 +270,6 @@ def detect_glint_inside_pupil(gray, pupil_mask, safe_mask):
 
         component = labels == label
 
-        # Additional validation against the original pupil mask.
-        # The component must lie completely inside its safe region.
         if np.any(component & (pupil_mask == 0)):
             continue
 
@@ -315,9 +285,6 @@ def detect_glint_inside_pupil(gray, pupil_mask, safe_mask):
 
         cx, cy = centroids[label]
 
-        # Ranking score: favour stronger local contrast and
-        # brighter reflections. This is a heuristic, not a
-        # guarantee that a candidate is the true corneal glint.
         score = (
             1.5 * mean_contrast
             + 0.35 * peak
@@ -353,14 +320,12 @@ def detect_glint_inside_pupil(gray, pupil_mask, safe_mask):
 # 7. PROCESS ONE ORIGINAL IMAGE
 # ============================================================
 
-def process_image(image_path, csv_row):
+def process_image(image_path, csv_row, annotated_folder, mask_folder, output_folder):
 
-    # Original image supplies real pixel brightness.
     gray = read_gray(image_path)
 
-    # Start final display from the Stage 1 annotated image.
     annotated_path = (
-        ANNOTATED_FOLDER /
+        annotated_folder /
         f"{image_path.stem}_annotated.png"
     )
 
@@ -385,13 +350,12 @@ def process_image(image_path, csv_row):
 
     for side in ("left", "right"):
 
-        # CSV determines whether Stage 1 found this pupil.
         if not pupil_was_found(csv_row, side):
             row[f"{side}_status"] = "PUPIL_NOT_FOUND"
             continue
 
         mask_path = (
-            MASK_FOLDER /
+            mask_folder /
             f"{image_path.stem}_mask_{side}.png"
         )
 
@@ -411,7 +375,6 @@ def process_image(image_path, csv_row):
             row[f"{side}_status"] = "PUPIL_MASK_TOO_SMALL"
             continue
 
-        # Detect a glint exclusively inside this pupil's safe mask.
         glint, candidate_count = detect_glint_inside_pupil(
             gray, pupil_mask, safe_mask
         )
@@ -425,8 +388,6 @@ def process_image(image_path, csv_row):
         gx = int(round(glint["x"]))
         gy = int(round(glint["y"]))
 
-        # Final safety check: the marker center must be inside the
-        # eroded pupil mask, not outside the pupil boundary.
         if (
             gy < 0 or gy >= safe_mask.shape[0] or
             gx < 0 or gx >= safe_mask.shape[1] or
@@ -435,7 +396,6 @@ def process_image(image_path, csv_row):
             row[f"{side}_status"] = "CENTER_OUTSIDE_SAFE_MASK"
             continue
 
-        # Draw the detected glint on the existing annotated image.
         cv2.circle(
             display_image,
             (gx, gy),
@@ -460,8 +420,6 @@ def process_image(image_path, csv_row):
         for key, value in glint.items():
             row[f"{side}_{key}"] = value
 
-        # Record whether Stage 1 reported a fallback outline.
-        # A fallback pupil boundary should be manually checked.
         outline_status = str(
             csv_row.get(f"{side}_outline", "")
         ).strip().lower()
@@ -470,9 +428,8 @@ def process_image(image_path, csv_row):
             outline_status if outline_status else "not_recorded"
         )
 
-    # Save final image with existing pupil outlines and glint markers.
     output_path = (
-        OUTPUT_FOLDER / "images" /
+        output_folder / "images" /
         f"{image_path.stem}_glint.png"
     )
 
@@ -487,93 +444,158 @@ def process_image(image_path, csv_row):
 
 def main():
 
-    OUTPUT_FOLDER.joinpath("images").mkdir(
-        parents=True, exist_ok=True
-    )
+    print()
+    print("=" * 80)
+    print("STAGE 2 - PUPIL GLINT DETECTION (INTERACTIVE INPUT)")
+    print("=" * 80)
+    print()
 
-    OUTPUT_FOLDER.joinpath("csv").mkdir(
-        parents=True, exist_ok=True
-    )
+    # Step 1: Enter base folder path (optional prefix)
+    base_folder = input("Enter base folder path (press Enter to skip): ").strip().strip('"')
 
-    stage1_rows = load_stage1_csv(STAGE1_CSV)
+    # Step 2: Enter number of paths
+    while True:
+        try:
+            num_paths_str = input("Enter the number of input paths: ").strip()
+            num_paths = int(num_paths_str)
+            if num_paths > 0:
+                break
+            print("Please enter a number greater than 0.")
+        except ValueError:
+            print("Invalid input. Please enter a valid integer.")
 
-    supported_extensions = {
-        ".png", ".jpg", ".jpeg", ".bmp", ".tif", ".tiff"
-    }
-
-    # Original files are expected directly in ORIGINAL_FOLDER.
-    # Stage 1 outputs are stored in their own subfolders.
-    image_files = sorted(
-        path for path in ORIGINAL_FOLDER.iterdir()
-        if path.is_file()
-        and path.suffix.lower() in supported_extensions
-        and not path.stem.endswith(
-            ("_annotated", "_overlay", "_glint")
-        )
-        and "_mask_left" not in path.stem
-        and "_mask_right" not in path.stem
-    )
-
-    if not image_files:
-        print("ERROR: No original images found.")
-        print(f"Check ORIGINAL_FOLDER: {ORIGINAL_FOLDER}")
-        return
-
-    rows = []
-
-    for index, image_path in enumerate(image_files, start=1):
-
-        csv_row = stage1_rows.get(image_path.name)
-
-        if csv_row is None:
-            result = {
-                "image": image_path.name,
-                "status": "IMAGE_NOT_FOUND_IN_STAGE1_CSV"
-            }
+    # Step 3: Enter each subfolder or dataset path
+    input_paths_list = []
+    for i in range(1, num_paths + 1):
+        path_input = input(f"Enter input path {i} (subfolder or full path): ").strip().strip('"')
+        
+        if base_folder and not os.path.isabs(path_input):
+            full_path = os.path.join(base_folder, path_input)
         else:
-            try:
-                result = process_image(image_path, csv_row)
-            except Exception as exc:
+            full_path = path_input
+            
+        input_paths_list.append(full_path)
+
+    input_folders = [
+        Path(os.path.abspath(os.path.expanduser(path)))
+        for path in input_paths_list
+    ]
+
+    for index, folder in enumerate(input_folders, start=1):
+        if not folder.is_dir():
+            print()
+            print(f"[ERROR] Input path {index} does not exist:")
+            print(folder)
+            print()
+            return
+
+    for folder in input_folders:
+        print()
+        print("-" * 80)
+        print(f"Processing folder: {folder}")
+        print("-" * 80)
+
+        original_folder = folder
+        annotated_folder = folder / "annotated"
+        mask_folder = folder / "masks"
+        stage1_csv = folder / "csv" / "results.csv"
+        output_folder = folder / "stage2_glint"
+
+        output_folder.joinpath("images").mkdir(
+            parents=True, exist_ok=True
+        )
+
+        output_folder.joinpath("csv").mkdir(
+            parents=True, exist_ok=True
+        )
+
+        try:
+            stage1_rows = load_stage1_csv(stage1_csv)
+        except Exception as e:
+            print(f"[WARNING] Skipping {folder} due to CSV error: {e}")
+            continue
+
+        supported_extensions = {
+            ".png", ".jpg", ".jpeg", ".bmp", ".tif", ".tiff"
+        }
+
+        image_files = sorted(
+            path for path in original_folder.iterdir()
+            if path.is_file()
+            and path.suffix.lower() in supported_extensions
+            and not path.stem.endswith(
+                ("_annotated", "_overlay", "_glint")
+            )
+            and "_mask_left" not in path.stem
+            and "_mask_right" not in path.stem
+        )
+
+        if not image_files:
+            print(f"[WARNING] No original images found in: {original_folder}")
+            continue
+
+        rows = []
+
+        for index_img, image_path in enumerate(image_files, start=1):
+
+            csv_row = stage1_rows.get(image_path.name)
+
+            if csv_row is None:
                 result = {
                     "image": image_path.name,
-                    "status": f"ERROR: {exc}"
+                    "status": "IMAGE_NOT_FOUND_IN_STAGE1_CSV"
                 }
+            else:
+                try:
+                    result = process_image(
+                        image_path, csv_row, 
+                        annotated_folder, mask_folder, output_folder
+                    )
+                except Exception as exc:
+                    result = {
+                        "image": image_path.name,
+                        "status": f"ERROR: {exc}"
+                    }
 
-        rows.append(result)
+            rows.append(result)
 
-        print(
-            f"[{index}/{len(image_files)}] "
-            f"{image_path.name}: "
-            f"L={result.get('left_status', 'CHECK')} | "
-            f"R={result.get('right_status', 'CHECK')}"
+            print(
+                f"[{index_img}/{len(image_files)}] "
+                f"{image_path.name}: "
+                f"L={result.get('left_status', 'CHECK')} | "
+                f"R={result.get('right_status', 'CHECK')}"
+            )
+
+        columns = ["image"]
+
+        for result in rows:
+            for key in result:
+                if key not in columns:
+                    columns.append(key)
+
+        output_csv = (
+            output_folder / "csv" / "glint_results.csv"
         )
 
-    # Create columns for every result field.
-    columns = ["image"]
+        with open(
+            output_csv,
+            "w",
+            newline="",
+            encoding="utf-8-sig"
+        ) as file:
 
-    for result in rows:
-        for key in result:
-            if key not in columns:
-                columns.append(key)
+            writer = csv.DictWriter(file, fieldnames=columns)
+            writer.writeheader()
+            writer.writerows(rows)
 
-    output_csv = (
-        OUTPUT_FOLDER / "csv" / "glint_results.csv"
-    )
+        print(f"\nStage 2 completed for {folder.name}.")
+        print(f"Annotated results: {output_folder / 'images'}")
+        print(f"Glint CSV: {output_csv}")
 
-    with open(
-        output_csv,
-        "w",
-        newline="",
-        encoding="utf-8-sig"
-    ) as file:
-
-        writer = csv.DictWriter(file, fieldnames=columns)
-        writer.writeheader()
-        writer.writerows(rows)
-
-    print("\nStage 2 completed.")
-    print(f"Annotated results: {OUTPUT_FOLDER / 'images'}")
-    print(f"Glint CSV: {output_csv}")
+    print()
+    print("=" * 80)
+    print("ALL STAGE 2 PROCESSING COMPLETED")
+    print("=" * 80)
 
 
 if __name__ == "__main__":

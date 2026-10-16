@@ -27,14 +27,6 @@ import math
 
 
 # ============================================================
-# ROOT FOLDER
-# ============================================================
-
-ROOT_HR_FOLDER = (
-       )
-
-
-# ============================================================
 # STAGE 1 / STAGE 2 FOLDER NAMES
 # ============================================================
 
@@ -260,8 +252,6 @@ def detect_stage1_green_glints(
         GREEN_UPPER
     )
 
-    # Small cleanup.
-
     kernel = np.ones(
         (3, 3),
         np.uint8
@@ -354,11 +344,6 @@ def choose_left_right_glints(
 
     right = None
 
-    # --------------------------------------------------------
-    # If several green markers exist on one side,
-    # choose the one closest to the expected eye center.
-    # --------------------------------------------------------
-
     if left_candidates:
 
         left = min(
@@ -391,8 +376,6 @@ def choose_left_right_glints(
 
 # ============================================================
 # SAMPLE IMAGE
-#
-# SAME AS WORKING CODE
 # ============================================================
 
 def _sample(
@@ -418,8 +401,6 @@ def _sample(
 
 # ============================================================
 # CONTRAST SCALE
-#
-# SAME AS WORKING CODE
 # ============================================================
 
 def _contrast_scale(
@@ -518,8 +499,6 @@ def _contrast_scale(
 
 # ============================================================
 # PERIMETER SCORE
-#
-# SAME AS WORKING CODE
 # ============================================================
 
 def _perimeter_score(
@@ -586,8 +565,6 @@ def _perimeter_score(
 
 # ============================================================
 # COARSE PUPIL FIT
-#
-# SAME AS WORKING CODE
 # ============================================================
 
 def _coarse_fit(
@@ -711,10 +688,6 @@ def _coarse_fit(
 
     current_score = score(p)
 
-    # --------------------------------------------------------
-    # Local refinement
-    # --------------------------------------------------------
-
     for step in (
         2.0,
         1.0,
@@ -769,8 +742,6 @@ def _coarse_fit(
 
 # ============================================================
 # LEAST-SQUARE CIRCLE
-#
-# SAME AS WORKING CODE
 # ============================================================
 
 def _fit_circle_lsq(
@@ -821,13 +792,6 @@ def _fit_circle_lsq(
 
 # ============================================================
 # REFINE HALF MAX
-#
-# THIS IS THE IMPORTANT WORKING METHOD.
-#
-# It does NOT use np.gradient().
-# Therefore the previous gradient-size error cannot occur here.
-#
-# SAME AS YOUR WORKING CODE.
 # ============================================================
 
 def _refine_half_max(
@@ -899,10 +863,6 @@ def _refine_half_max(
 
     points = []
 
-    # ========================================================
-    # CHECK EVERY ANGULAR RAY
-    # ========================================================
-
     for k in range(
         n_rays
     ):
@@ -920,10 +880,6 @@ def _refine_half_max(
                 outside_selection
             ]
         )
-
-        # ----------------------------------------------------
-        # Need dark pupil / brighter outer region transition
-        # ----------------------------------------------------
 
         if (
             inner_median
@@ -976,10 +932,6 @@ def _refine_half_max(
         ):
 
             continue
-
-        # ----------------------------------------------------
-        # Interpolate boundary position
-        # ----------------------------------------------------
 
         denominator = (
             profile[hit - 1]
@@ -1034,10 +986,6 @@ def _refine_half_max(
             )
         )
 
-    # ========================================================
-    # NEED ENOUGH RAW CONTOUR POINTS
-    # ========================================================
-
     points = np.array(
         points
     )
@@ -1049,10 +997,6 @@ def _refine_half_max(
     ):
 
         return None
-
-    # ========================================================
-    # OUTLIER REJECTION
-    # ========================================================
 
     keep = np.ones(
         len(points),
@@ -1150,9 +1094,6 @@ def _refine_half_max(
 
 # ============================================================
 # FIT PUPIL CIRCLE
-#
-# THIS IS THE SAME MAIN PUPIL-FIT LOGIC
-# FROM YOUR WORKING CODE.
 # ============================================================
 
 def fit_pupil_circle(
@@ -1170,10 +1111,6 @@ def fit_pupil_circle(
         *
         contrast
     )
-
-    # ========================================================
-    # COARSE FIT
-    # ========================================================
 
     coarse = _coarse_fit(
         gray_blur,
@@ -1200,10 +1137,6 @@ def fit_pupil_circle(
     contour_points = None
 
     contour_keep = None
-
-    # ========================================================
-    # HALF-MAX REFINEMENT
-    # ========================================================
 
     for _ in range(4):
 
@@ -1284,10 +1217,6 @@ def fit_pupil_circle(
 
             break
 
-    # ========================================================
-    # FINAL CIRCLE VALUES
-    # ========================================================
-
     cx = float(
         circle[0]
     )
@@ -1301,10 +1230,6 @@ def fit_pupil_circle(
     )
 
     h, w = gray_blur.shape
-
-    # ========================================================
-    # PUPIL / OUTSIDE RATIO
-    # ========================================================
 
     x1 = max(
         0,
@@ -1381,10 +1306,6 @@ def fit_pupil_circle(
     else:
 
         ratio = 0.0
-
-    # ========================================================
-    # REVIEW FLAG
-    # ========================================================
 
     needs_review = (
 
@@ -1477,10 +1398,6 @@ def fit_pupil_circle(
 
 # ============================================================
 # DRAW RAW CONTOUR
-#
-# IMPORTANT:
-# Draw the RAW contour points directly.
-# Do NOT draw the fitted circle.
 # ============================================================
 
 def draw_raw_contour(
@@ -1509,10 +1426,6 @@ def draw_raw_contour(
         points,
         dtype=np.float64
     )
-
-    # --------------------------------------------------------
-    # Keep all raw contour points in angular order.
-    # --------------------------------------------------------
 
     cx = float(
         pupil["cx"]
@@ -1626,10 +1539,6 @@ def process_one_image(
         cv2.COLOR_BGR2GRAY
     )
 
-    # ========================================================
-    # GET GREEN GLINTS FROM STAGE 1 OUTPUT
-    # ========================================================
-
     glints = detect_stage1_green_glints(
         image
     )
@@ -1642,13 +1551,6 @@ def process_one_image(
             w
         )
     )
-
-    # ========================================================
-    # REMOVE GLINT FROM PUPIL-FITTING IMAGE
-    #
-    # This follows the logic of the working code:
-    # the glint should not disturb pupil-boundary fitting.
-    # ========================================================
 
     gray_for_pupil = gray.copy()
 
@@ -1697,10 +1599,6 @@ def process_one_image(
             cv2.INPAINT_TELEA
         )
 
-    # ========================================================
-    # BLUR
-    # ========================================================
-
     gray_blur = cv2.GaussianBlur(
         gray_for_pupil.astype(
             np.float32
@@ -1708,10 +1606,6 @@ def process_one_image(
         (0, 0),
         PUPIL_BLUR_SIGMA
     )
-
-    # ========================================================
-    # PUPIL DETECTION
-    # ========================================================
 
     pupils = {
         "left": None,
@@ -1749,20 +1643,6 @@ def process_one_image(
             side
         ] = pupil
 
-    # ========================================================
-    # CREATE OUTPUT
-    #
-    # Original image
-    # + raw pupil contour
-    # + Stage 1 glint marker
-    #
-    # NO circle
-    # NO angle
-    # NO arrow
-    # NO intensity
-    # NO slope
-    # ========================================================
-
     output = image.copy()
 
     detected_count = 0
@@ -1784,10 +1664,6 @@ def process_one_image(
             side
         ]
 
-        # ----------------------------------------------------
-        # Raw contour
-        # ----------------------------------------------------
-
         if pupil is not None:
 
             detected_count += 1
@@ -1798,20 +1674,12 @@ def process_one_image(
                 PUPIL_RAW_CONTOUR_THICKNESS
             )
 
-        # ----------------------------------------------------
-        # Glint
-        # ----------------------------------------------------
-
         if glint is not None:
 
             draw_glint(
                 output,
                 glint
             )
-
-        # ----------------------------------------------------
-        # Save contour CSV
-        # ----------------------------------------------------
 
         if (
             pupil is not None
@@ -1868,10 +1736,6 @@ def process_one_image(
                     }
                 )
 
-    # ========================================================
-    # SAVE IMAGE
-    # ========================================================
-
     if detected_count > 0:
 
         os.makedirs(
@@ -1885,10 +1749,6 @@ def process_one_image(
             output_image_path,
             output
         )
-
-    # ========================================================
-    # DISPLAY
-    # ========================================================
 
     if DISPLAY_VISUALS:
 
@@ -1935,10 +1795,6 @@ def process_stage1_folder(
         "=" * 80
     )
 
-    # ========================================================
-    # FIND IMAGES
-    # ========================================================
-
     image_files = find_images(
         stage1_folder
     )
@@ -1957,10 +1813,6 @@ def process_stage1_folder(
     print(
         f"Images found: {len(image_files)}"
     )
-
-    # ========================================================
-    # OUTPUT
-    # ========================================================
 
     dataset_parent = os.path.dirname(
         stage1_folder
@@ -1986,19 +1838,11 @@ def process_stage1_folder(
         exist_ok=True
     )
 
-    # ========================================================
-    # CSV DATA
-    # ========================================================
-
     contour_rows = []
 
     total_detected = 0
 
     processed = 0
-
-    # ========================================================
-    # PROCESS ALL IMAGES
-    # ========================================================
 
     for index, image_path in enumerate(
         image_files,
@@ -2013,10 +1857,6 @@ def process_stage1_folder(
             f"[{index}/{len(image_files)}] "
             f"{filename}"
         )
-
-        # ----------------------------------------------------
-        # Preserve nested folder structure.
-        # ----------------------------------------------------
 
         relative_path = os.path.relpath(
             image_path,
@@ -2065,10 +1905,6 @@ def process_stage1_folder(
                 f"    -> {result} pupils detected"
             )
 
-    # ========================================================
-    # SAVE CONTOUR CSV
-    # ========================================================
-
     os.makedirs(
         stage2_root,
         exist_ok=True
@@ -2098,10 +1934,6 @@ def process_stage1_folder(
         writer.writerows(
             contour_rows
         )
-
-    # ========================================================
-    # SUMMARY
-    # ========================================================
 
     print()
     print(
@@ -2146,243 +1978,96 @@ def process_stage1_folder(
 
 
 # ============================================================
-# MAIN
+# MAIN (INTERACTIVE TERMINAL INPUT)
 # ============================================================
 
 def main():
 
     print()
-    print(
-        "=" * 80
-    )
+    print("=" * 80)
+    print("STAGE 2 - RAW PUPIL CONTOUR (INTERACTIVE INPUT)")
+    print("=" * 80)
+    print()
 
-    print(
-        "STAGE 2 - RAW PUPIL CONTOUR"
-    )
+    # Step 1: Enter base folder path (optional prefix)
+    base_folder = input("Enter base folder path (press Enter to skip): ").strip().strip('"')
 
-    print(
-        "=" * 80
-    )
+    # Step 2: Enter number of paths
+    while True:
+        try:
+            num_paths_str = input("Enter the number of input paths: ").strip()
+            num_paths = int(num_paths_str)
+            if num_paths > 0:
+                break
+            print("Please enter a number greater than 0.")
+        except ValueError:
+            print("Invalid input. Please enter a valid integer.")
 
-    print(
-        "Input  : stage1_glint"
-    )
+    # Step 3: Enter each subfolder or image path
+    input_paths_list = []
+    for i in range(1, num_paths + 1):
+        path_input = input(f"Enter input path {i} (subfolder or full path): ").strip().strip('"')
+        
+        if base_folder and not os.path.isabs(path_input):
+            full_path = os.path.join(base_folder, path_input)
+        else:
+            full_path = path_input
+            
+        input_paths_list.append(full_path)
 
-    print(
-        "Output : stage2_raw_contour"
-    )
+    input_folders = [
+        os.path.abspath(os.path.expanduser(path))
+        for path in input_paths_list
+    ]
 
-    print(
-        "Method : same pupil fitting algorithm "
-        "as working code"
-    )
+    for index, folder in enumerate(input_folders, start=1):
 
-    print(
-        "ML     : NO"
-    )
+        if not os.path.isdir(folder):
+            print()
+            print(f"[ERROR] Input path {index} does not exist:")
+            print(folder)
+            print()
+            return
 
-    print(
-        "YOLO   : NO"
-    )
+    # Find stage 1 folders across all user inputs
+    stage1_folders = []
+    for folder in input_folders:
+        found = find_stage1_folders(folder)
+        if found:
+            stage1_folders.extend(found)
+        else:
+            # Fallback if the path itself is a stage1 folder or image directory
+            stage1_folders.append(folder)
 
-    print(
-        "Haar   : NO"
-    )
-
-    print(
-        "Stage3 : NOT REQUIRED"
-    )
-
-    print(
-        "=" * 80
-    )
-
-    # ========================================================
-    # ROOT CHECK
-    # ========================================================
-
-    if not os.path.isdir(
-        ROOT_HR_FOLDER
-    ):
-
-        print()
-        print(
-            "[ERROR] ROOT_HR_FOLDER does not exist:"
-        )
-
-        print(
-            ROOT_HR_FOLDER
-        )
-
-        return
-
-    # ========================================================
-    # FIND ALL STAGE 1 FOLDERS
-    # ========================================================
-
-    stage1_folders = find_stage1_folders(
-        ROOT_HR_FOLDER
-    )
+    stage1_folders = sorted(set(stage1_folders))
 
     if not stage1_folders:
-
         print()
-        print(
-            "[ERROR] No stage1_glint folder found."
-        )
-
-        print()
-        print(
-            "Expected structure:"
-        )
-
-        print(
-            "pupil_image"
-        )
-
-        print(
-            "    main_folder"
-        )
-
-        print(
-            "        stage1_glint"
-        )
-
-        print(
-            "            image1.png"
-        )
-
-        print(
-            "            image2.png"
-        )
-
+        print("[ERROR] No valid stage 1 folders found.")
         return
 
     print()
-
-    print(
-        f"Stage 1 folders found: "
-        f"{len(stage1_folders)}"
-    )
+    print(f"Stage 1 folders found to process: {len(stage1_folders)}")
 
     total_images = 0
-
     total_pupils = 0
 
-    # ========================================================
-    # PROCESS ALL STAGE 1 FOLDERS
-    # ========================================================
-
     for stage1_folder in stage1_folders:
-
-        processed, detected = (
-            process_stage1_folder(
-                stage1_folder
-            )
-        )
-
+        processed, detected = process_stage1_folder(stage1_folder)
         total_images += processed
-
         total_pupils += detected
 
-    # ========================================================
-    # CLOSE WINDOWS
-    # ========================================================
-
     if DISPLAY_VISUALS:
-
         cv2.destroyAllWindows()
 
-    # ========================================================
-    # FINAL SUMMARY
-    # ========================================================
-
     print()
-    print(
-        "=" * 80
-    )
-
-    print(
-        "STAGE 2 COMPLETED"
-    )
-
-    print(
-        "=" * 80
-    )
-
-    print(
-        f"Stage 1 folders processed : "
-        f"{len(stage1_folders)}"
-    )
-
-    print(
-        f"Images processed          : "
-        f"{total_images}"
-    )
-
-    print(
-        f"Pupil detections          : "
-        f"{total_pupils}"
-    )
-
-    print()
-
-    print(
-        "Stage 2 output contains:"
-    )
-
-    print(
-        "    Raw pupil contour"
-    )
-
-    print(
-        "    Stage 1 glint marker"
-    )
-
-    print(
-        "    pupil_raw_contour_points.csv"
-    )
-
-    print()
-
-    print(
-        "Stage 2 does NOT contain:"
-    )
-
-    print(
-        "    Pupil circle"
-    )
-
-    print(
-        "    Angle"
-    )
-
-    print(
-        "    Intensity profile"
-    )
-
-    print(
-        "    5-point averaging"
-    )
-
-    print(
-        "    Straight-line fit"
-    )
-
-    print(
-        "    Slope"
-    )
-
-    print()
-
-    print(
-        "Stage 3 can now use the Stage 2 CSV "
-        "for angle calculation."
-    )
-
-    print(
-        "=" * 80
-    )
+    print("=" * 80)
+    print("STAGE 2 COMPLETED")
+    print("=" * 80)
+    print(f"Stage 1 folders processed : {len(stage1_folders)}")
+    print(f"Images processed          : {total_images}")
+    print(f"Pupil detections          : {total_pupils}")
+    print("=" * 80)
 
 
 # ============================================================
