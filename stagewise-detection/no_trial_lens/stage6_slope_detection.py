@@ -21,12 +21,6 @@
 #         Compare multiple input paths
 #         Generate LEFT and RIGHT slope graphs
 #
-# NO:
-#     YOLO
-#     ML
-#     Haar
-#     best.pt
-#
 # ============================================================
 
 import os
@@ -40,50 +34,6 @@ import matplotlib
 matplotlib.use("Agg")
 
 import matplotlib.pyplot as plt
-
-
-# ============================================================
-# ROOT FOLDER
-# ============================================================
-
-ROOT_HR_FOLDER = (
-    )
-
-
-# ============================================================
-# INPUT PATHS
-#
-# Add 2, 3, 4 or more dataset folders here.
-#
-# Example:
-#
-# pupil_image
-#     ├── sachin
-#     ├── rakshita
-#     ├── shiya
-#
-# Each folder should contain:
-#
-# stage5_average_fit
-#     └── average_5_pixel_points.csv
-#
-# ============================================================
-
-INPUT_PATHS = [
-
-    os.path.join(
-        ROOT_HR_FOLDER,
-        " "
-    )
-
-    
-    
-       
-
-
-    
-
-]
 
 
 # ============================================================
@@ -110,9 +60,6 @@ SUMMARY_CSV_NAME = "slope_summary.csv"
 
 # ============================================================
 # AVERAGE PIXELS
-#
-# Stage 5 uses 5 pixels.
-# This is recorded in the output for verification.
 # ============================================================
 
 AVERAGE_PIXELS = 5
@@ -133,10 +80,6 @@ GRAPH_DPI = 160
 
 def find_stage5_csv(folder):
 
-    # --------------------------------------------------------
-    # First check the normal expected location
-    # --------------------------------------------------------
-
     direct_path = os.path.join(
         folder,
         STAGE5_FOLDER_NAME,
@@ -148,10 +91,6 @@ def find_stage5_csv(folder):
     ):
 
         return direct_path
-
-    # --------------------------------------------------------
-    # Otherwise search recursively
-    # --------------------------------------------------------
 
     pattern = os.path.join(
         folder,
@@ -313,10 +252,6 @@ def read_stage5_csv(
 
                 return rows
 
-            # ------------------------------------------------
-            # Columns
-            # ------------------------------------------------
-
             image_col = find_column(
                 fieldnames,
                 [
@@ -408,10 +343,6 @@ def read_stage5_csv(
                 )
 
                 return rows
-
-            # ------------------------------------------------
-            # Read rows
-            # ------------------------------------------------
 
             for row in reader:
 
@@ -546,10 +477,6 @@ def group_profile_rows(
             row
         )
 
-    # --------------------------------------------------------
-    # Sort every profile by distance
-    # --------------------------------------------------------
-
     for key in groups:
 
         groups[key].sort(
@@ -562,13 +489,6 @@ def group_profile_rows(
 
 # ============================================================
 # CALCULATE SLOPE
-#
-# y = mx + c
-#
-# m = slope
-#
-# x = averaged distance
-# y = averaged intensity
 # ============================================================
 
 def calculate_slope(
@@ -595,10 +515,6 @@ def calculate_slope(
         dtype=np.float64
     )
 
-    # --------------------------------------------------------
-    # Remove invalid values
-    # --------------------------------------------------------
-
     valid = (
         np.isfinite(x)
         &
@@ -612,10 +528,6 @@ def calculate_slope(
     if len(x) < 2:
 
         return None
-
-    # --------------------------------------------------------
-    # Straight line fit
-    # --------------------------------------------------------
 
     slope, intercept = np.polyfit(
         x,
@@ -631,19 +543,11 @@ def calculate_slope(
         intercept
     )
 
-    # --------------------------------------------------------
-    # Predicted intensity
-    # --------------------------------------------------------
-
     predicted = (
         slope * x
         +
         intercept
     )
-
-    # --------------------------------------------------------
-    # R²
-    # --------------------------------------------------------
 
     ss_res = float(
         np.sum(
@@ -722,10 +626,6 @@ def process_one_path(
         input_path
     )
 
-    # --------------------------------------------------------
-    # Find Stage 5 CSV
-    # --------------------------------------------------------
-
     stage5_csv = find_stage5_csv(
         input_path
     )
@@ -758,10 +658,6 @@ def process_one_path(
         stage5_csv
     )
 
-    # --------------------------------------------------------
-    # Read
-    # --------------------------------------------------------
-
     rows = read_stage5_csv(
         stage5_csv
     )
@@ -774,10 +670,6 @@ def process_one_path(
 
         return []
 
-    # --------------------------------------------------------
-    # Group image + eye
-    # --------------------------------------------------------
-
     groups = group_profile_rows(
         rows
     )
@@ -787,10 +679,6 @@ def process_one_path(
     )
 
     path_results = []
-
-    # --------------------------------------------------------
-    # Process each image + eye
-    # --------------------------------------------------------
 
     for (
         image_name,
@@ -886,13 +774,6 @@ def process_one_path(
 
 # ============================================================
 # CALCULATE PATH SUMMARY
-#
-# For every input path:
-#
-#     LEFT  -> mean slope
-#     RIGHT -> mean slope
-#
-# This allows multiple paths to be compared.
 # ============================================================
 
 def create_path_summary(
@@ -1073,16 +954,6 @@ def save_summary_csv(
 
 # ============================================================
 # PLOT MULTI-PATH SLOPES
-#
-# Separate graph:
-#
-#     LEFT EYE
-#
-# and
-#
-#     RIGHT EYE
-#
-# Each path gets one mean slope point.
 # ============================================================
 
 def create_slope_graph(
@@ -1105,10 +976,6 @@ def create_slope_graph(
 
         return
 
-    # --------------------------------------------------------
-    # Sort by path
-    # --------------------------------------------------------
-
     data.sort(
         key=lambda row:
         row["path"]
@@ -1123,10 +990,6 @@ def create_slope_graph(
         row["mean_slope"]
         for row in data
     ]
-
-    # --------------------------------------------------------
-    # Create graph
-    # --------------------------------------------------------
 
     plt.figure(
         figsize=FIGURE_SIZE
@@ -1145,10 +1008,6 @@ def create_slope_graph(
         label="Mean slope"
     )
 
-    # --------------------------------------------------------
-    # Show values on graph
-    # --------------------------------------------------------
-
     for i, value in enumerate(
         slopes
     ):
@@ -1161,10 +1020,6 @@ def create_slope_graph(
             va="bottom"
         )
 
-    # --------------------------------------------------------
-    # X axis
-    # --------------------------------------------------------
-
     plt.xticks(
         x,
         labels,
@@ -1176,47 +1031,23 @@ def create_slope_graph(
         "Input path"
     )
 
-    # --------------------------------------------------------
-    # Y axis
-    # --------------------------------------------------------
-
     plt.ylabel(
         "Slope of intensity profile"
     )
-
-    # --------------------------------------------------------
-    # Title
-    # --------------------------------------------------------
 
     plt.title(
         f"{eye.capitalize()} Eye - "
         f"Slope Comparison Across Input Paths"
     )
 
-    # --------------------------------------------------------
-    # Grid
-    # --------------------------------------------------------
-
     plt.grid(
         True,
         alpha=0.3
     )
 
-    # --------------------------------------------------------
-    # Legend
-    # --------------------------------------------------------
-
     plt.legend()
 
-    # --------------------------------------------------------
-    # Layout
-    # --------------------------------------------------------
-
     plt.tight_layout()
-
-    # --------------------------------------------------------
-    # Save
-    # --------------------------------------------------------
 
     os.makedirs(
         os.path.dirname(
@@ -1243,10 +1074,7 @@ def create_slope_graph(
 
 
 # ============================================================
-# OPTIONAL:
 # SLOPE VS ANGLE GRAPH
-#
-# This graph shows individual profiles from all paths.
 # ============================================================
 
 def create_slope_vs_angle_graph(
@@ -1277,10 +1105,6 @@ def create_slope_vs_angle_graph(
     plt.figure(
         figsize=FIGURE_SIZE
     )
-
-    # --------------------------------------------------------
-    # Plot each path separately
-    # --------------------------------------------------------
 
     paths = sorted(
         set(
@@ -1313,10 +1137,6 @@ def create_slope_vs_angle_graph(
             s=45,
             label=path
         )
-
-    # --------------------------------------------------------
-    # Labels
-    # --------------------------------------------------------
 
     plt.xlabel(
         "Pupil orientation angle (degrees)"
@@ -1359,7 +1179,7 @@ def create_slope_vs_angle_graph(
 
 
 # ============================================================
-# MAIN
+# MAIN (INTERACTIVE TERMINAL INPUT)
 # ============================================================
 
 def main():
@@ -1367,14 +1187,46 @@ def main():
     print()
     print("=" * 80)
     print(
-        "STAGE 6 - FINAL SLOPE DETECTION"
+        "STAGE 6 - FINAL SLOPE DETECTION (INTERACTIVE INPUT)"
     )
     print("=" * 80)
     print()
 
+    # Step 1: Enter base folder path (optional prefix)
+    base_folder = input("Enter base folder path (press Enter to skip): ").strip().strip('"')
+
+    # Step 2: Enter number of paths
+    while True:
+        try:
+            num_paths_str = input("Enter the number of input paths: ").strip()
+            num_paths = int(num_paths_str)
+            if num_paths > 0:
+                break
+            print("Please enter a number greater than 0.")
+        except ValueError:
+            print("Invalid input. Please enter a valid integer.")
+
+    # Step 3: Enter each subfolder or dataset path
+    input_paths_list = []
+    for i in range(1, num_paths + 1):
+        path_input = input(f"Enter input path {i} (subfolder or full path): ").strip().strip('"')
+        
+        if base_folder and not os.path.isabs(path_input):
+            full_path = os.path.join(base_folder, path_input)
+        else:
+            full_path = path_input
+            
+        input_paths_list.append(full_path)
+
+    input_folders = [
+        os.path.abspath(os.path.expanduser(path))
+        for path in input_paths_list
+    ]
+
+    print()
     print(
         f"Number of input paths: "
-        f"{len(INPUT_PATHS)}"
+        f"{len(input_folders)}"
     )
 
     print(
@@ -1384,30 +1236,18 @@ def main():
 
     print()
 
-    # ========================================================
-    # CHECK INPUT PATH COUNT
-    # ========================================================
-
-    if len(INPUT_PATHS) < 2:
+    if len(input_folders) < 2:
 
         print(
-            "[ERROR] Please provide at least 2 input paths."
-        )
-
-        print(
-            "Edit INPUT_PATHS in the code."
+            "[ERROR] Please provide at least 2 input paths for comparison."
         )
 
         return
 
-    # ========================================================
-    # OUTPUT
-    # ========================================================
-
-    output_root = os.path.join(
-        ROOT_HR_FOLDER,
-        OUTPUT_FOLDER_NAME
-    )
+    if base_folder and os.path.isdir(base_folder):
+        output_root = os.path.join(base_folder, OUTPUT_FOLDER_NAME)
+    else:
+        output_root = os.path.join(os.path.dirname(input_folders[0]), OUTPUT_FOLDER_NAME)
 
     graph_root = os.path.join(
         output_root,
@@ -1419,17 +1259,9 @@ def main():
         exist_ok=True
     )
 
-    # ========================================================
-    # ALL SLOPE RESULTS
-    # ========================================================
-
     slope_rows = []
 
-    # ========================================================
-    # PROCESS EVERY PATH
-    # ========================================================
-
-    for input_path in INPUT_PATHS:
+    for input_path in input_folders:
 
         if not os.path.isdir(
             input_path
@@ -1450,10 +1282,6 @@ def main():
             input_path,
             slope_rows
         )
-
-    # ========================================================
-    # CHECK RESULTS
-    # ========================================================
 
     if not slope_rows:
 
@@ -1477,17 +1305,9 @@ def main():
 
         return
 
-    # ========================================================
-    # CREATE SUMMARY
-    # ========================================================
-
     summary = create_path_summary(
         slope_rows
     )
-
-    # ========================================================
-    # SAVE SLOPE RESULTS
-    # ========================================================
 
     slope_csv_path = os.path.join(
         output_root,
@@ -1499,10 +1319,6 @@ def main():
         slope_rows
     )
 
-    # ========================================================
-    # SAVE SUMMARY
-    # ========================================================
-
     summary_csv_path = os.path.join(
         output_root,
         SUMMARY_CSV_NAME
@@ -1512,10 +1328,6 @@ def main():
         summary_csv_path,
         summary
     )
-
-    # ========================================================
-    # CREATE LEFT GRAPH
-    # ========================================================
 
     left_graph = os.path.join(
         graph_root,
@@ -1528,10 +1340,6 @@ def main():
         left_graph
     )
 
-    # ========================================================
-    # CREATE RIGHT GRAPH
-    # ========================================================
-
     right_graph = os.path.join(
         graph_root,
         "right_eye_slope_comparison.png"
@@ -1542,10 +1350,6 @@ def main():
         "right",
         right_graph
     )
-
-    # ========================================================
-    # CREATE SLOPE VS ANGLE GRAPHS
-    # ========================================================
 
     left_angle_graph = os.path.join(
         graph_root,
@@ -1568,10 +1372,6 @@ def main():
         "right",
         right_angle_graph
     )
-
-    # ========================================================
-    # PRINT SUMMARY
-    # ========================================================
 
     print()
     print("=" * 80)

@@ -43,13 +43,6 @@ from matplotlib.lines import Line2D
 
 
 # ============================================================
-# 1. ROOT FOLDER -- CHANGE THIS IF YOUR DATASET PARENT DIFFERS
-# ============================================================
-ROOT_HR_FOLDER = Path(
-    )
-
-
-# ============================================================
 # 2. FOLDER / FILE NAMES
 # ============================================================
 STAGE4_FOLDER_NAME = "stage4_intensity_profile"
@@ -68,7 +61,6 @@ STATUS_CSV = "stage5_processing_status.csv"
 AVERAGE_PROFILE_PIXELS = 5
 
 # A potential glint spike must reach at least this intensity.
-# The source Stage 4 profile should normally use the same 0-255 scale.
 MIN_BRIGHT_VALUE = 100.0
 
 # The point must rise this many intensity levels above its neighbours.
@@ -131,22 +123,36 @@ def normalize_image_name(value):
     return Path(str(value or "").strip()).name
 
 
-def find_stage4_csv_files(root_folder):
-    """Find Stage 4 CSV files recursively, skipping Stage 5 outputs."""
+def find_stage4_csv_in_path(folder_path):
+    """Find Stage 4 CSV files given a specific input path."""
     found = []
-    if not root_folder.exists():
+    folder_path = Path(folder_path)
+    if not folder_path.exists():
         return found
 
-    for current_root, dirs, files in os.walk(root_folder):
-        dirs[:] = [
-            name for name in dirs
-            if name.lower() != STAGE5_FOLDER_NAME.lower()
-        ]
-        if Path(current_root).name.lower() != STAGE4_FOLDER_NAME.lower():
-            continue
-        matching = [name for name in files if name.lower() == STAGE4_CSV_NAME.lower()]
-        for name in matching:
-            found.append(Path(current_root) / name)
+    # Check direct location
+    direct_csv = folder_path / STAGE4_FOLDER_NAME / STAGE4_CSV_NAME
+    if direct_csv.is_file():
+        found.append(direct_csv)
+    elif folder_path.name.lower() == STAGE4_FOLDER_NAME.lower() and (folder_path / STAGE4_CSV_NAME).is_file():
+        found.append(folder_path / STAGE4_CSV_NAME)
+    else:
+        # Search recursively inside the folder
+        for current_root, dirs, files in os.walk(folder_path):
+            dirs[:] = [
+                name for name in dirs
+                if name.lower() != STAGE5_FOLDER_NAME.lower()
+            ]
+            if Path(current_root).name.lower() != STAGE4_FOLDER_NAME.lower():
+                continue
+            for name in files:
+                if name.lower() == STAGE4_CSV_NAME.lower():
+                    found.append(Path(current_root) / name)
+        
+        if not found:
+            # Fallback search for angle_intensity_values.csv anywhere
+            for path in folder_path.glob(f"**/{STAGE4_CSV_NAME}"):
+                found.append(path)
 
     return sorted(set(found))
 
@@ -206,12 +212,10 @@ def read_stage4_csv(csv_path):
             if angle is not None:
                 groups[key]["angles"].append(angle)
 
-    # Sort every profile in distance order.
     for record in groups.values():
         order = np.argsort(np.asarray(record["distances"], dtype=float))
         record["distances"] = np.asarray(record["distances"], dtype=float)[order]
         record["intensities"] = np.asarray(record["intensities"], dtype=float)[order]
-        # A profile normally has a constant angle. Median is robust to minor formatting variations.
         record["angle"] = float(np.median(record["angles"])) if record["angles"] else None
 
     return groups
@@ -285,7 +289,6 @@ def average_valid_profile_points(distances, intensities, ignored):
     if len(valid_indices) == 0:
         return []
 
-    # Split into uninterrupted runs so no group joins points across glint.
     split_at = np.where(np.diff(valid_indices) != 1)[0] + 1
     runs = np.split(valid_indices, split_at)
 
@@ -293,7 +296,6 @@ def average_valid_profile_points(distances, intensities, ignored):
     for run in runs:
         for start in range(0, len(run), AVERAGE_PROFILE_PIXELS):
             group = run[start:start + AVERAGE_PROFILE_PIXELS]
-            # Strictly complete groups of 5 only.
             if len(group) != AVERAGE_PROFILE_PIXELS:
                 continue
 
@@ -352,14 +354,12 @@ def save_average_fit_graph(average_points, fit, output_path, image_name,
     fig, ax = plt.subplots(figsize=(12, 7))
 
     if len(x):
-        # Main averaged points (blue by default matplotlib cycle).
         ax.scatter(
             x, y, s=60, marker="o",
             label=f"Averaged intensity ({AVERAGE_PROFILE_PIXELS} pixels)",
             zorder=3,
         )
 
-        # Highlight minimum and maximum averaged intensities.
         dark_index = int(np.argmin(y))
         bright_index = int(np.argmax(y))
 
@@ -373,7 +373,6 @@ def save_average_fit_graph(average_points, fit, output_path, image_name,
         )
 
         if fit is not None:
-            # Draw the fitted line across the full profile x-range.
             line_x = np.linspace(float(np.min(x)), float(np.max(x)), 200)
             line_y = fit["slope"] * line_x + fit["intercept"]
             ax.plot(
@@ -508,25 +507,67 @@ def save_csv(path, rows, columns):
 
 
 # ============================================================
-# 12. MAIN
+# 12. MAIN (INTERACTIVE TERMINAL INPUT)
 # ============================================================
 def main():
-    print("=" * 78)
-    print("STAGE 5 - AVERAGE 5 PROFILE POINTS + STRAIGHT-LINE FIT")
-    print("=" * 78)
-    print(f"Root folder: {ROOT_HR_FOLDER}")
+    print()
+    print("=" * 80)
+    print("STAGE 5 - AVERAGE PROFILE POINTS AND FIT (INTERACTIVE INPUT)")
+    print("=" * 80)
+    print()
+
+    # Step 1: Enter base folder path (optional prefix)
+    base_folder = input("Enter base folder path (press Enter to skip): ").strip().strip('"')
+
+    # Step 2: Enter number of paths
+    while True:
+        try:
+            num_paths_str = input("Enter the number of input paths: ").strip()
+            num_paths = int(num_paths_str)
+            if num_paths > 0:
+                break
+            print("Please enter a number greater than 0.")
+        except ValueError:
+            print("Invalid input. Please enter a valid integer.")
+
+    # Step 3: Enter each subfolder or dataset path
+    input_paths_list = []
+    for i in range(1, num_paths + 1):
+        path_input = input(f"Enter input path {i} (subfolder or full path): ").strip().strip('"')
+        
+        if base_folder and not os.path.isabs(path_input):
+            full_path = os.path.join(base_folder, path_input)
+        else:
+            full_path = path_input
+            
+        input_paths_list.append(full_path)
+
+    input_folders = [
+        Path(os.path.abspath(os.path.expanduser(path)))
+        for path in input_paths_list
+    ]
+
+    for index, folder in enumerate(input_folders, start=1):
+        if not folder.is_dir():
+            print()
+            print(f"[ERROR] Input path {index} does not exist:")
+            print(folder)
+            print()
+            return
+
+    print()
     print(f"Averaging: exactly {AVERAGE_PROFILE_PIXELS} consecutive valid Stage 4 rows")
     print("Glint handling: detect bright spike, ignore its padded region, continue after it")
     print("Fit: least-squares line y = slope*x + intercept, using averaged points only")
 
-    if not ROOT_HR_FOLDER.exists():
-        print(f"[ERROR] Root folder does not exist: {ROOT_HR_FOLDER}")
-        print("Edit ROOT_HR_FOLDER near the top of this script.")
-        return
+    stage4_csvs = []
+    for folder in input_folders:
+        stage4_csvs.extend(find_stage4_csv_in_path(folder))
 
-    stage4_csvs = find_stage4_csv_files(ROOT_HR_FOLDER)
+    stage4_csvs = sorted(list(set(stage4_csvs)))
+
     if not stage4_csvs:
-        print("[ERROR] No stage4_intensity_profile/angle_intensity_values.csv files found.")
+        print("[ERROR] No stage4_intensity_profile/angle_intensity_values.csv files found in the specified paths.")
         return
 
     print(f"Stage 4 CSV files found: {len(stage4_csvs)}")
