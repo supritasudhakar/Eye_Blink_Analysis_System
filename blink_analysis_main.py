@@ -12,7 +12,7 @@ import math
 # ROOT FOLDER
 # ============================================================
 
-ROOT_HR_FOLDER = (
+ROOT_HR_FOLDER = (r"C:\Users\neo\OneDrive\Desktop\auto_annotation(unet_model)\pupil_image\arnav"
     
 )
 
@@ -27,6 +27,8 @@ ROOT_HR_FOLDER = (
 # separately in the LEFT-EYE and RIGHT-EYE slope-vs-angle graphs.
 
 INPUT_PATHS = [
+    r"C:\Users\neo\OneDrive\Desktop\auto_annotation(unet_model)\pupil_image\arnav\arnav_800_mA_Exp_100_AGain_2.0_20260916_145341",
+    r"C:\Users\neo\OneDrive\Desktop\auto_annotation(unet_model)\pupil_image\arnav\arnav_800_mA_Exp_100_AGain_2.0_20260916_145359"
 ]
 # ============================================================
 # OUTPUT FOLDERS
